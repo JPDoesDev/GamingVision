@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>GamingVision</AssemblyName>
+    <RootNamespace>GamingVision</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>GamingVision Team</Authors>
+    <Description>Accessibility tool for visually impaired gamers using computer vision and text-to-speech</Description>
+    <WindowsSdkPackageVersion>10.0.22621.48</WindowsSdkPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MVVM support -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+
+    <!-- ONNX Runtime with DirectML for GPU acceleration -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.16.3" />
+
+    <!-- JSON configuration -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+
+    <!-- Windows Speech (SAPI) -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+
+    <!-- System.Drawing for image processing -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+
+    <!-- WMI for GPU detection -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

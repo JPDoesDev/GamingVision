@@ -1,4 +1,4 @@
-# VIGamingVision
+# GamingVision
 
 An accessibility tool for visually impaired gamers that uses computer vision (YOLO) to detect UI elements in games and reads them aloud using text-to-speech.
 
@@ -28,7 +28,7 @@ dotnet build -c Release
 
 The executable will be at:
 ```
-src\VIGamingVision\bin\Release\net8.0-windows10.0.22621.0\VIGamingVision.exe
+src\GamingVision\bin\Release\net8.0-windows10.0.22621.0\GamingVision.exe
 ```
 
 ### 2. Export Your YOLO Model
@@ -44,10 +44,10 @@ This exports `NoMansAccess/NoMansModel.pt` to the `models/` folder.
 ### 3. Run the Application
 
 ```powershell
-dotnet run -c Release --project src\VIGamingVision
+dotnet run -c Release --project src\GamingVision
 ```
 
-Or run `VIGamingVision.exe` directly.
+Or run `GamingVision.exe` directly.
 
 ## Default Hotkeys
 
@@ -64,8 +64,8 @@ All hotkeys are configurable per game in Game Settings.
 ## Project Structure
 
 ```
-VIGamingVision/
-├── src/VIGamingVision/
+GamingVision/
+├── src/GamingVision/
 │   ├── Models/              # Data models (GameProfile, Settings, etc.)
 │   ├── ViewModels/          # MVVM ViewModels
 │   ├── Views/               # WPF Windows and dialogs
