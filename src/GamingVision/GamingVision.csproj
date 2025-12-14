@@ -13,6 +13,10 @@
     <Authors>GamingVision Team</Authors>
     <Description>Accessibility tool for visually impaired gamers using computer vision and text-to-speech</Description>
     <WindowsSdkPackageVersion>10.0.22621.48</WindowsSdkPackageVersion>
+
+    <!-- Target only x64 Windows -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
