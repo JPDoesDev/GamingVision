@@ -95,10 +95,16 @@ public partial class GameSettingsViewModel : ObservableObject
 
     // Detection settings
     [ObservableProperty]
+    private bool _autoReadEnabled = true;
+
+    [ObservableProperty]
     private int _autoReadCooldown = 2000;
 
     [ObservableProperty]
-    private float _confidenceThreshold = 0.5f;
+    private float _confidenceThreshold = 0.3f;
+
+    [ObservableProperty]
+    private float _autoReadConfidenceThreshold = 0.6f;
 
     public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
@@ -188,8 +194,10 @@ public partial class GameSettingsViewModel : ObservableObject
         HotkeyQuit = _currentProfile.Hotkeys.Quit;
 
         // Detection
+        AutoReadEnabled = _currentProfile.Detection.AutoReadEnabled;
         AutoReadCooldown = _currentProfile.Detection.AutoReadCooldown;
         ConfidenceThreshold = _currentProfile.Detection.ConfidenceThreshold;
+        AutoReadConfidenceThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
     }
 
     private void SaveProfileSettings()
@@ -229,8 +237,10 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Hotkeys.Quit = HotkeyQuit;
 
         // Detection
+        _currentProfile.Detection.AutoReadEnabled = AutoReadEnabled;
         _currentProfile.Detection.AutoReadCooldown = AutoReadCooldown;
         _currentProfile.Detection.ConfidenceThreshold = ConfidenceThreshold;
+        _currentProfile.Detection.AutoReadConfidenceThreshold = AutoReadConfidenceThreshold;
     }
 
     private static List<string> ParseLabelList(string input)

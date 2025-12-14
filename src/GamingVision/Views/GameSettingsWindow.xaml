@@ -46,14 +46,7 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
             <StackPanel>
                 <!-- Game Profile Settings -->
-                <GroupBox>
-                    <GroupBox.Header>
-                        <TextBlock>
-                            <Run Text="Game Profile ("/>
-                            <Run Text="{Binding SelectedGame.DisplayName, FallbackValue=''}"/>
-                            <Run Text=")"/>
-                        </TextBlock>
-                    </GroupBox.Header>
+                <GroupBox Header="Game Profile">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -104,14 +97,7 @@
                 </GroupBox>
 
                 <!-- Capture Settings -->
-                <GroupBox>
-                    <GroupBox.Header>
-                        <TextBlock>
-                            <Run Text="Capture ("/>
-                            <Run Text="{Binding SelectedGame.DisplayName, FallbackValue=''}"/>
-                            <Run Text=")"/>
-                        </TextBlock>
-                    </GroupBox.Header>
+                <GroupBox Header="Screen Capture">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -143,14 +129,7 @@
                 </GroupBox>
 
                 <!-- Voice Settings -->
-                <GroupBox>
-                    <GroupBox.Header>
-                        <TextBlock>
-                            <Run Text="Voice ("/>
-                            <Run Text="{Binding SelectedGame.DisplayName, FallbackValue=''}"/>
-                            <Run Text=")"/>
-                        </TextBlock>
-                    </GroupBox.Header>
+                <GroupBox Header="Text-to-Speech">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -212,14 +191,7 @@
                 </GroupBox>
 
                 <!-- Hotkey Settings -->
-                <GroupBox>
-                    <GroupBox.Header>
-                        <TextBlock>
-                            <Run Text="Hotkeys ("/>
-                            <Run Text="{Binding SelectedGame.DisplayName, FallbackValue=''}"/>
-                            <Run Text=")"/>
-                        </TextBlock>
-                    </GroupBox.Header>
+                <GroupBox Header="Hotkeys">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -256,14 +228,7 @@
                 </GroupBox>
 
                 <!-- Detection Settings -->
-                <GroupBox>
-                    <GroupBox.Header>
-                        <TextBlock>
-                            <Run Text="Detection ("/>
-                            <Run Text="{Binding SelectedGame.DisplayName, FallbackValue=''}"/>
-                            <Run Text=")"/>
-                        </TextBlock>
-                    </GroupBox.Header>
+                <GroupBox Header="Detection">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -272,21 +237,39 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Auto-read Cooldown:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8"
+                                  Content="Enable Auto-Read"
+                                  IsChecked="{Binding AutoReadEnabled}"
+                                  AutomationProperties.Name="Enable Auto-Read"
+                                  AutomationProperties.HelpText="When enabled, primary labels will be read automatically when detected"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-read Cooldown:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="500" Maximum="5000" Value="{Binding AutoReadCooldown}"
                                     TickFrequency="500" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Auto-read Cooldown"/>
                             <TextBlock Text="{Binding AutoReadCooldown, StringFormat={}{0} ms}" Margin="15,0,0,0" Width="70" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Confidence Threshold:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Auto-Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                            <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding AutoReadConfidenceThreshold}"
+                                    TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                    AutomationProperties.Name="Auto-Read Confidence Threshold"
+                                    AutomationProperties.HelpText="Higher values reduce false positives during automatic reading"/>
+                            <TextBlock Text="{Binding AutoReadConfidenceThreshold, StringFormat={}{0:F1}}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Manual Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding ConfidenceThreshold}"
                                     TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                    AutomationProperties.Name="Confidence Threshold"/>
+                                    AutomationProperties.Name="Manual Read Confidence Threshold"
+                                    AutomationProperties.HelpText="Lower values allow more detections when manually triggered"/>
                             <TextBlock Text="{Binding ConfidenceThreshold, StringFormat={}{0:F1}}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>

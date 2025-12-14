@@ -536,8 +536,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (e.Detections.Count == 0)
             return;
 
+        // Check if auto-read is enabled
+        var profile = GetSelectedGameProfile();
+        var autoReadEnabled = profile?.Detection.AutoReadEnabled ?? true;
+
         var labelsToRead = string.Join(", ", e.Detections.Select(d => d.Label));
-        System.Diagnostics.Debug.WriteLine($"Primary objects changed: {labelsToRead}");
+        System.Diagnostics.Debug.WriteLine($"Primary objects changed: {labelsToRead} (AutoRead: {autoReadEnabled})");
 
         // Get current frame for OCR
         CapturedFrame? frame;
@@ -579,8 +583,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var combinedText = string.Join(" | ", textParts);
             System.Diagnostics.Debug.WriteLine($"OCR result: {combinedText}");
 
-            // Speak the extracted text
-            if (_ttsService != null && _ttsService.IsReady)
+            // Speak the extracted text (only if auto-read is enabled)
+            if (autoReadEnabled && _ttsService != null && _ttsService.IsReady)
             {
                 // Build speech-friendly text (join with pauses)
                 var speechText = string.Join(". ", textParts.Select(t => t.Replace(":", ",")));

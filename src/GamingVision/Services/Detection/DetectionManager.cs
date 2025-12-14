@@ -80,6 +80,8 @@ public class DetectionManager : IDisposable
         if (!_detectionService.IsReady || _currentProfile == null)
             return [];
 
+        // Use the lower manual read threshold for detection to capture all potential objects
+        // Auto-read will filter more strictly, manual reads will use these results
         var threshold = _currentProfile.Detection.ConfidenceThreshold;
         var detections = await _detectionService.DetectAsync(frame, threshold);
 
@@ -98,13 +100,19 @@ public class DetectionManager : IDisposable
 
         lock (_detectionLock)
         {
-            // Filter by primary/secondary labels
+            // Filter by primary/secondary labels (for general tracking)
             var primaryDetections = detections
                 .Where(d => _currentProfile.PrimaryLabels.Contains(d.Label))
                 .ToList();
 
             var secondaryDetections = detections
                 .Where(d => _currentProfile.SecondaryLabels.Contains(d.Label))
+                .ToList();
+
+            // Filter primary detections by higher auto-read threshold for automatic reading
+            var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+            var autoReadPrimaryDetections = primaryDetections
+                .Where(d => d.Confidence >= autoReadThreshold)
                 .ToList();
 
             // Raise detection event
@@ -116,19 +124,20 @@ public class DetectionManager : IDisposable
                 Timestamp = DateTime.UtcNow
             });
 
-            // Check if primary objects changed
-            var previousPrimaryLabels = _lastDetections
-                .Where(d => _currentProfile.PrimaryLabels.Contains(d.Label))
+            // Check if primary objects changed (using auto-read threshold filtered detections)
+            var previousAutoReadLabels = _lastDetections
+                .Where(d => _currentProfile.PrimaryLabels.Contains(d.Label) &&
+                           d.Confidence >= autoReadThreshold)
                 .Select(d => d.Label)
                 .OrderBy(l => l)
                 .ToList();
 
-            var currentPrimaryLabels = primaryDetections
+            var currentAutoReadLabels = autoReadPrimaryDetections
                 .Select(d => d.Label)
                 .OrderBy(l => l)
                 .ToList();
 
-            bool primaryChanged = !previousPrimaryLabels.SequenceEqual(currentPrimaryLabels);
+            bool primaryChanged = !previousAutoReadLabels.SequenceEqual(currentAutoReadLabels);
 
             // Check cooldown for auto-read
             var timeSinceLastDetection = DateTime.UtcNow - _lastDetectionTime;
@@ -138,8 +147,8 @@ public class DetectionManager : IDisposable
             {
                 _lastDetectionTime = DateTime.UtcNow;
 
-                // Sort by priority
-                var sortedPrimary = SortByPriority(primaryDetections, _currentProfile.LabelPriority);
+                // Sort by priority (use auto-read filtered detections)
+                var sortedPrimary = SortByPriority(autoReadPrimaryDetections, _currentProfile.LabelPriority);
 
                 PrimaryObjectChanged?.Invoke(this, new PrimaryObjectChangedEventArgs
                 {

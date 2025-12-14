@@ -11,9 +11,16 @@ public class DetectionSettings
     public int AutoReadCooldown { get; set; } = 2000;
 
     /// <summary>
-    /// Minimum confidence threshold for detections (0.0-1.0).
+    /// Minimum confidence threshold for manual read detections (0.0-1.0).
+    /// Lower threshold since user explicitly requested the read.
     /// </summary>
-    public float ConfidenceThreshold { get; set; } = 0.5f;
+    public float ConfidenceThreshold { get; set; } = 0.3f;
+
+    /// <summary>
+    /// Minimum confidence threshold for auto-read detections (0.0-1.0).
+    /// Higher threshold to reduce false positives during automatic reading.
+    /// </summary>
+    public float AutoReadConfidenceThreshold { get; set; } = 0.6f;
 
     /// <summary>
     /// IOU threshold for Non-Maximum Suppression (0.0-1.0).
@@ -48,6 +55,7 @@ public class DetectionSettings
     {
         AutoReadCooldown = AutoReadCooldown,
         ConfidenceThreshold = ConfidenceThreshold,
+        AutoReadConfidenceThreshold = AutoReadConfidenceThreshold,
         NmsThreshold = NmsThreshold,
         MaxDetections = MaxDetections,
         TargetFps = TargetFps,

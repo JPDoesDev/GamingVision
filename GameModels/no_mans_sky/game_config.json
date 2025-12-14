@@ -45,7 +45,8 @@
   },
   "detection": {
     "autoReadCooldown": 1000,
-    "confidenceThreshold": 0.5,
+    "confidenceThreshold": 0.3,
+    "autoReadConfidenceThreshold": 0.6,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
