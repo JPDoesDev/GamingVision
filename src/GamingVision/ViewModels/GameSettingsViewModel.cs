@@ -95,7 +95,7 @@ public partial class GameSettingsViewModel : ObservableObject
 
     // Detection settings
     [ObservableProperty]
-    private bool _autoReadEnabled = true;
+    private bool _autoReadEnabled = false;
 
     [ObservableProperty]
     private int _autoReadCooldown = 2000;
@@ -105,6 +105,12 @@ public partial class GameSettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private float _autoReadConfidenceThreshold = 0.6f;
+
+    [ObservableProperty]
+    private bool _readPrimaryLabelAloud = true;
+
+    [ObservableProperty]
+    private bool _readSecondaryLabelAloud = false;
 
     public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
@@ -198,6 +204,8 @@ public partial class GameSettingsViewModel : ObservableObject
         AutoReadCooldown = _currentProfile.Detection.AutoReadCooldown;
         ConfidenceThreshold = _currentProfile.Detection.ConfidenceThreshold;
         AutoReadConfidenceThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+        ReadPrimaryLabelAloud = _currentProfile.Detection.ReadPrimaryLabelAloud;
+        ReadSecondaryLabelAloud = _currentProfile.Detection.ReadSecondaryLabelAloud;
     }
 
     private void SaveProfileSettings()
@@ -241,6 +249,8 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Detection.AutoReadCooldown = AutoReadCooldown;
         _currentProfile.Detection.ConfidenceThreshold = ConfidenceThreshold;
         _currentProfile.Detection.AutoReadConfidenceThreshold = AutoReadConfidenceThreshold;
+        _currentProfile.Detection.ReadPrimaryLabelAloud = ReadPrimaryLabelAloud;
+        _currentProfile.Detection.ReadSecondaryLabelAloud = ReadSecondaryLabelAloud;
     }
 
     private static List<string> ParseLabelList(string input)

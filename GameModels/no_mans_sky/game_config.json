@@ -5,21 +5,23 @@
   "windowTitle": "No Man\u0027s Sky",
   "primaryLabels": [
     "title",
-    "item",
-    "resource",
-    "waypoint"
+    "item"
   ],
   "secondaryLabels": [
     "info",
-    "quest"
+    "quest",
+    "controls",
+    "menu_labeld"
   ],
   "labelPriority": [
     "title",
     "item",
-    "resource",
     "info",
     "quest",
-    "waypoint"
+    "controls",
+    "menu_labeld",
+    "other",
+    "junk"
   ],
   "hotkeys": {
     "readPrimary": "Alt\u002B1",
@@ -50,7 +52,9 @@
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
-    "autoReadEnabled": true,
-    "onlyReadChanges": true
+    "autoReadEnabled": false,
+    "onlyReadChanges": true,
+    "readPrimaryLabelAloud": true,
+    "readSecondaryLabelAloud": false
   }
 }

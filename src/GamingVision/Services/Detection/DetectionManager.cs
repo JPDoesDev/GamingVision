@@ -17,6 +17,11 @@ public class DetectionManager : IDisposable
     private List<DetectedObject> _lastDetections = [];
     private readonly object _detectionLock = new();
 
+    // Tracking for label disappearance detection
+    private readonly Dictionary<string, int> _framesSinceLastSeen = new();
+    private readonly Dictionary<string, DetectedObject> _trackedObjects = new();
+    private const int DefaultDisappearanceFrameThreshold = 5;
+
     /// <summary>
     /// Gets whether the detection manager is currently running.
     /// </summary>
@@ -36,6 +41,12 @@ public class DetectionManager : IDisposable
     /// Event raised when primary objects change (for auto-read).
     /// </summary>
     public event EventHandler<PrimaryObjectChangedEventArgs>? PrimaryObjectChanged;
+
+    /// <summary>
+    /// Event raised when a tracked label disappears (not detected for several frames).
+    /// Used to cancel ongoing TTS reads when user moves away from an object.
+    /// </summary>
+    public event EventHandler<LabelDisappearedEventArgs>? LabelDisappeared;
 
     public DetectionManager()
     {
@@ -100,6 +111,9 @@ public class DetectionManager : IDisposable
 
         lock (_detectionLock)
         {
+            // Check if any tracked labels have disappeared (for TTS cancellation)
+            CheckTrackedLabelsDisappearance(detections);
+
             // Filter by primary/secondary labels (for general tracking)
             var primaryDetections = detections
                 .Where(d => _currentProfile.PrimaryLabels.Contains(d.Label))
@@ -235,6 +249,139 @@ public class DetectionManager : IDisposable
         _lastDetectionTime = DateTime.MinValue;
     }
 
+    /// <summary>
+    /// Starts tracking a label for disappearance detection.
+    /// Call this when starting to read an object so we can detect when user moves away.
+    /// </summary>
+    /// <param name="label">The label to track.</param>
+    /// <param name="detection">The detection object being read.</param>
+    public void StartTrackingLabel(string label, DetectedObject detection)
+    {
+        lock (_detectionLock)
+        {
+            _trackedObjects[label] = detection;
+            _framesSinceLastSeen[label] = 0;
+            Debug.WriteLine($"Started tracking label: {label}");
+        }
+    }
+
+    /// <summary>
+    /// Stops tracking a label (e.g., when TTS completes normally).
+    /// </summary>
+    /// <param name="label">The label to stop tracking.</param>
+    public void StopTrackingLabel(string label)
+    {
+        lock (_detectionLock)
+        {
+            _trackedObjects.Remove(label);
+            _framesSinceLastSeen.Remove(label);
+            Debug.WriteLine($"Stopped tracking label: {label}");
+        }
+    }
+
+    /// <summary>
+    /// Stops tracking all labels.
+    /// </summary>
+    public void StopTrackingAllLabels()
+    {
+        lock (_detectionLock)
+        {
+            _trackedObjects.Clear();
+            _framesSinceLastSeen.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Checks if tracked labels have disappeared and raises events accordingly.
+    /// </summary>
+    private void CheckTrackedLabelsDisappearance(List<DetectedObject> currentDetections)
+    {
+        if (_trackedObjects.Count == 0) return;
+
+        var labelsToRemove = new List<string>();
+        var currentLabels = currentDetections.Select(d => d.Label).ToHashSet();
+
+        foreach (var (label, trackedDetection) in _trackedObjects)
+        {
+            // Check if this label is still present
+            var matchingDetection = currentDetections.FirstOrDefault(d => d.Label == label);
+
+            if (matchingDetection == null)
+            {
+                // Label not found in current frame
+                _framesSinceLastSeen[label]++;
+
+                if (_framesSinceLastSeen[label] >= DefaultDisappearanceFrameThreshold)
+                {
+                    Debug.WriteLine($"Label disappeared after {_framesSinceLastSeen[label]} frames: {label}");
+                    labelsToRemove.Add(label);
+
+                    LabelDisappeared?.Invoke(this, new LabelDisappearedEventArgs
+                    {
+                        Label = label,
+                        LastDetection = trackedDetection,
+                        FramesMissing = _framesSinceLastSeen[label]
+                    });
+                }
+            }
+            else
+            {
+                // Label found - check if it's the same object (similar position) or a different one
+                bool isSameObject = IsOverlapping(trackedDetection, matchingDetection, 0.3f);
+
+                if (isSameObject)
+                {
+                    // Same object, reset counter
+                    _framesSinceLastSeen[label] = 0;
+                    _trackedObjects[label] = matchingDetection; // Update with latest position
+                }
+                else
+                {
+                    // Different object with same label - user moved to a new item
+                    Debug.WriteLine($"Label moved to different object: {label}");
+                    labelsToRemove.Add(label);
+
+                    LabelDisappeared?.Invoke(this, new LabelDisappearedEventArgs
+                    {
+                        Label = label,
+                        LastDetection = trackedDetection,
+                        FramesMissing = 0,
+                        MovedToNewObject = true
+                    });
+                }
+            }
+        }
+
+        // Remove labels that have disappeared
+        foreach (var label in labelsToRemove)
+        {
+            _trackedObjects.Remove(label);
+            _framesSinceLastSeen.Remove(label);
+        }
+    }
+
+    /// <summary>
+    /// Checks if two detections overlap significantly (same object).
+    /// </summary>
+    private static bool IsOverlapping(DetectedObject a, DetectedObject b, float minIoU)
+    {
+        int x1 = Math.Max(a.X1, b.X1);
+        int y1 = Math.Max(a.Y1, b.Y1);
+        int x2 = Math.Min(a.X2, b.X2);
+        int y2 = Math.Min(a.Y2, b.Y2);
+
+        int intersectionWidth = Math.Max(0, x2 - x1);
+        int intersectionHeight = Math.Max(0, y2 - y1);
+        float intersection = intersectionWidth * intersectionHeight;
+
+        float areaA = a.Width * a.Height;
+        float areaB = b.Width * b.Height;
+        float union = areaA + areaB - intersection;
+
+        float iou = union > 0 ? intersection / union : 0;
+        return iou >= minIoU;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -264,4 +411,30 @@ public class PrimaryObjectChangedEventArgs : EventArgs
 {
     public List<DetectedObject> Detections { get; init; } = [];
     public DateTime Timestamp { get; init; }
+}
+
+/// <summary>
+/// Event arguments for when a tracked label disappears from detection.
+/// </summary>
+public class LabelDisappearedEventArgs : EventArgs
+{
+    /// <summary>
+    /// The label that disappeared.
+    /// </summary>
+    public string Label { get; init; } = "";
+
+    /// <summary>
+    /// The last detection of this label before it disappeared.
+    /// </summary>
+    public DetectedObject? LastDetection { get; init; }
+
+    /// <summary>
+    /// Number of consecutive frames the label was missing.
+    /// </summary>
+    public int FramesMissing { get; init; }
+
+    /// <summary>
+    /// True if the label moved to a different object (same label, different position).
+    /// </summary>
+    public bool MovedToNewObject { get; init; }
 }

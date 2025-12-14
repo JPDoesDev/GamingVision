@@ -163,12 +163,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Reads the current primary objects on demand.
+    /// Reads the highest priority primary object on demand.
     /// </summary>
     private async Task ReadPrimaryObjectsAsync()
     {
-        if (_detectionManager == null || _ttsService == null)
+        if (_detectionManager == null || !IsDetectionRunning)
+        {
+            System.Media.SystemSounds.Beep.Play();
             return;
+        }
+
+        if (_ttsService == null)
+            return;
+
+        var profile = GetSelectedGameProfile();
+        var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
 
         var primaryDetections = _detectionManager.GetCurrentPrimaryDetections();
         if (primaryDetections.Count == 0)
@@ -177,6 +186,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Get highest priority detection (list is already sorted by priority)
+        var detection = primaryDetections[0];
+
         // Get frame for OCR
         CapturedFrame? frame;
         lock (_frameLock)
@@ -186,45 +198,56 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            var labels = string.Join(", ", primaryDetections.Select(d => d.Label));
-            await _ttsService.SpeakAsync(labels, interrupt: true);
+            await _ttsService.SpeakAsync(detection.Label, interrupt: true);
             return;
         }
 
-        // Extract text from regions
-        var regions = primaryDetections.Select(OcrRegion.FromDetection).ToList();
+        // Extract text from the highest priority detection region
+        var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
         var textResults = await _ocrService.ExtractTextFromRegionsAsync(
             frame.Data, frame.Width, frame.Height, frame.Stride, regions);
 
-        var textParts = new List<string>();
-        foreach (var detection in primaryDetections)
+        string displayText;
+        string speechText;
+
+        if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
         {
-            if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
-            {
-                textParts.Add($"{detection.Label}, {text}");
-            }
-            else
-            {
-                textParts.Add(detection.Label);
-            }
+            displayText = $"{detection.Label}: {text}";
+            speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+        }
+        else
+        {
+            displayText = detection.Label;
+            speechText = readLabelAloud ? detection.Label : "";
         }
 
-        var speechText = string.Join(". ", textParts);
-        await _ttsService.SpeakAsync(speechText, interrupt: true);
+        if (!string.IsNullOrEmpty(speechText))
+        {
+            await _ttsService.SpeakAsync(speechText, interrupt: true);
+        }
 
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
-            LastReadText = string.Join(" | ", textParts);
+            LastReadText = displayText;
         });
     }
 
     /// <summary>
-    /// Reads the current secondary objects on demand.
+    /// Reads the highest priority secondary object on demand.
     /// </summary>
     private async Task ReadSecondaryObjectsAsync()
     {
-        if (_detectionManager == null || _ttsService == null)
+        if (_detectionManager == null || !IsDetectionRunning)
+        {
+            System.Media.SystemSounds.Beep.Play();
             return;
+        }
+
+        if (_ttsService == null)
+            return;
+
+        var profile = GetSelectedGameProfile();
+        var readLabelAloud = profile?.Detection.ReadSecondaryLabelAloud ?? false;
 
         var secondaryDetections = _detectionManager.GetCurrentSecondaryDetections();
         if (secondaryDetections.Count == 0)
@@ -233,6 +256,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Get highest priority detection (list is already sorted by priority)
+        var detection = secondaryDetections[0];
+
         // Get frame for OCR
         CapturedFrame? frame;
         lock (_frameLock)
@@ -242,35 +268,37 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            var labels = string.Join(", ", secondaryDetections.Select(d => d.Label));
-            await _ttsService.SpeakAsync(labels, interrupt: true);
+            await _ttsService.SpeakAsync(detection.Label, interrupt: true);
             return;
         }
 
-        // Extract text from regions
-        var regions = secondaryDetections.Select(OcrRegion.FromDetection).ToList();
+        // Extract text from the highest priority detection region
+        var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
         var textResults = await _ocrService.ExtractTextFromRegionsAsync(
             frame.Data, frame.Width, frame.Height, frame.Stride, regions);
 
-        var textParts = new List<string>();
-        foreach (var detection in secondaryDetections)
+        string displayText;
+        string speechText;
+
+        if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
         {
-            if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
-            {
-                textParts.Add($"{detection.Label}, {text}");
-            }
-            else
-            {
-                textParts.Add(detection.Label);
-            }
+            displayText = $"{detection.Label}: {text}";
+            speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+        }
+        else
+        {
+            displayText = detection.Label;
+            speechText = readLabelAloud ? detection.Label : "";
         }
 
-        var speechText = string.Join(". ", textParts);
-        await _ttsService.SpeakAsync(speechText, interrupt: true);
+        if (!string.IsNullOrEmpty(speechText))
+        {
+            await _ttsService.SpeakAsync(speechText, interrupt: true);
+        }
 
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
-            LastReadText = string.Join(" | ", textParts);
+            LastReadText = displayText;
         });
     }
 
@@ -389,6 +417,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _detectionManager = new DetectionManager();
         _detectionManager.DetectionsReady += OnDetectionsReady;
         _detectionManager.PrimaryObjectChanged += OnPrimaryObjectChanged;
+        _detectionManager.LabelDisappeared += OnLabelDisappeared;
 
         DetectionStatus = "Loading model...";
         ModelStatus = "Loading...";
@@ -479,6 +508,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             _detectionManager.DetectionsReady -= OnDetectionsReady;
             _detectionManager.PrimaryObjectChanged -= OnPrimaryObjectChanged;
+            _detectionManager.LabelDisappeared -= OnLabelDisappeared;
+            _detectionManager.StopTrackingAllLabels();
         }
 
         IsDetectionRunning = false;
@@ -530,18 +561,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         });
     }
 
+    private void OnLabelDisappeared(object? sender, LabelDisappearedEventArgs e)
+    {
+        // Label disappeared or moved to different object - cancel any ongoing TTS
+        System.Diagnostics.Debug.WriteLine($"Label disappeared: {e.Label} (MovedToNew: {e.MovedToNewObject}, FramesMissing: {e.FramesMissing})");
+
+        // Cancel current speech and clear queue
+        _ttsService?.Stop();
+        _ttsService?.ClearQueue();
+
+        // Reset the auto-read cooldown so a new object can be read immediately
+        _detectionManager?.ResetCooldown();
+    }
+
     private async void OnPrimaryObjectChanged(object? sender, PrimaryObjectChangedEventArgs e)
     {
         // Primary objects changed - queue for auto-read
         if (e.Detections.Count == 0)
             return;
 
-        // Check if auto-read is enabled
+        // Check settings
         var profile = GetSelectedGameProfile();
         var autoReadEnabled = profile?.Detection.AutoReadEnabled ?? true;
+        var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
 
-        var labelsToRead = string.Join(", ", e.Detections.Select(d => d.Label));
-        System.Diagnostics.Debug.WriteLine($"Primary objects changed: {labelsToRead} (AutoRead: {autoReadEnabled})");
+        // Get highest priority detection only (list is already sorted by priority)
+        var detection = e.Detections[0];
+        System.Diagnostics.Debug.WriteLine($"Primary object changed: {detection.Label} (AutoRead: {autoReadEnabled})");
 
         // Get current frame for OCR
         CapturedFrame? frame;
@@ -554,54 +600,62 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
-                LastReadText = labelsToRead;
+                LastReadText = detection.Label;
             });
             return;
         }
 
         try
         {
-            // Extract text from detected regions
-            var regions = e.Detections.Select(OcrRegion.FromDetection).ToList();
+            // Extract text from the highest priority detection region
+            var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
             var textResults = await _ocrService.ExtractTextFromRegionsAsync(
                 frame.Data, frame.Width, frame.Height, frame.Stride, regions);
 
-            // Build combined text result
-            var textParts = new List<string>();
-            foreach (var detection in e.Detections)
+            // Build text result
+            string displayText;
+            string speechText;
+
+            if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
             {
-                if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
-                {
-                    textParts.Add($"{detection.Label}: {text}");
-                }
-                else
-                {
-                    textParts.Add(detection.Label);
-                }
+                displayText = $"{detection.Label}: {text}";
+                speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+            }
+            else
+            {
+                displayText = detection.Label;
+                speechText = readLabelAloud ? detection.Label : "";
             }
 
-            var combinedText = string.Join(" | ", textParts);
-            System.Diagnostics.Debug.WriteLine($"OCR result: {combinedText}");
+            System.Diagnostics.Debug.WriteLine($"OCR result: {displayText}");
 
-            // Speak the extracted text (only if auto-read is enabled)
-            if (autoReadEnabled && _ttsService != null && _ttsService.IsReady)
+            // Speak the extracted text (only if auto-read is enabled and we have something to say)
+            if (autoReadEnabled && _ttsService != null && _ttsService.IsReady && !string.IsNullOrEmpty(speechText))
             {
-                // Build speech-friendly text (join with pauses)
-                var speechText = string.Join(". ", textParts.Select(t => t.Replace(":", ",")));
+                // Start tracking the label being read so we can cancel if user moves away
+                _detectionManager?.StartTrackingLabel(detection.Label, detection);
+
                 await _ttsService.SpeakAsync(speechText, interrupt: true);
+
+                // Stop tracking after speech completes (if not already stopped due to disappearance)
+                _detectionManager?.StopTrackingLabel(detection.Label);
             }
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
-                LastReadText = combinedText;
+                LastReadText = displayText;
             });
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"OCR error: {ex.Message}");
+
+            // Stop tracking on error
+            _detectionManager?.StopTrackingAllLabels();
+
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
-                LastReadText = labelsToRead;
+                LastReadText = detection.Label;
             });
         }
     }

@@ -41,12 +41,22 @@ public class DetectionSettings
     /// <summary>
     /// Enable auto-read when primary objects are detected.
     /// </summary>
-    public bool AutoReadEnabled { get; set; } = true;
+    public bool AutoReadEnabled { get; set; } = false;
 
     /// <summary>
     /// Only read objects that have changed since last read.
     /// </summary>
     public bool OnlyReadChanges { get; set; } = true;
+
+    /// <summary>
+    /// Speak the label name aloud when reading primary objects.
+    /// </summary>
+    public bool ReadPrimaryLabelAloud { get; set; } = true;
+
+    /// <summary>
+    /// Speak the label name aloud when reading secondary objects.
+    /// </summary>
+    public bool ReadSecondaryLabelAloud { get; set; } = false;
 
     /// <summary>
     /// Creates a deep copy of this instance.
@@ -60,6 +70,8 @@ public class DetectionSettings
         MaxDetections = MaxDetections,
         TargetFps = TargetFps,
         AutoReadEnabled = AutoReadEnabled,
-        OnlyReadChanges = OnlyReadChanges
+        OnlyReadChanges = OnlyReadChanges,
+        ReadPrimaryLabelAloud = ReadPrimaryLabelAloud,
+        ReadSecondaryLabelAloud = ReadSecondaryLabelAloud
     };
 }

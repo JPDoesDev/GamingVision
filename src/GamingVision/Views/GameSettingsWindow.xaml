@@ -59,6 +59,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Display Name:" VerticalAlignment="Center" Margin="0,8"/>
@@ -88,11 +90,23 @@
                                  AutomationProperties.Name="Primary Detection Labels"
                                  AutomationProperties.HelpText="Comma-separated list of labels that trigger auto-read"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Labels:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
+                        <CheckBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,0,5,5"
+                                  Content="Read label aloud"
+                                  IsChecked="{Binding ReadPrimaryLabelAloud}"
+                                  AutomationProperties.Name="Read Primary Label Aloud"
+                                  AutomationProperties.HelpText="Speak the label name when reading primary objects"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Secondary Labels:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
                                  Text="{Binding SecondaryLabels, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="Secondary Detection Labels"
                                  AutomationProperties.HelpText="Comma-separated list of labels read on hotkey only"/>
+
+                        <CheckBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,0,5,5"
+                                  Content="Read label aloud"
+                                  IsChecked="{Binding ReadSecondaryLabelAloud}"
+                                  AutomationProperties.Name="Read Secondary Label Aloud"
+                                  AutomationProperties.HelpText="Speak the label name when reading secondary objects"/>
                     </Grid>
                 </GroupBox>
 
