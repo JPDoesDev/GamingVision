@@ -1,7 +1,7 @@
 namespace GamingVision.Models;
 
 /// <summary>
-/// Root configuration object containing all application and game settings.
+/// Application-level configuration stored in app_settings.json.
 /// </summary>
 public class AppConfiguration
 {
@@ -11,95 +11,58 @@ public class AppConfiguration
     public string Version { get; set; } = "1.0";
 
     /// <summary>
-    /// Application-wide settings.
+    /// Currently selected game profile identifier.
     /// </summary>
-    public ApplicationSettings Application { get; set; } = new();
+    public string SelectedGame { get; set; } = "no_mans_sky";
 
     /// <summary>
-    /// Currently selected game profile key.
+    /// Enable GPU acceleration via DirectML.
     /// </summary>
-    public string SelectedGame { get; set; } = string.Empty;
+    public bool UseDirectML { get; set; } = true;
 
     /// <summary>
-    /// Dictionary of game profiles keyed by game identifier.
+    /// Start detection automatically when a game is selected.
     /// </summary>
-    public Dictionary<string, GameProfile> Games { get; set; } = [];
+    public bool AutoStartDetection { get; set; } = false;
 
     /// <summary>
-    /// Gets the currently selected game profile, or null if not found.
+    /// Minimize to system tray when closing the window.
     /// </summary>
-    public GameProfile? GetSelectedGameProfile()
+    public bool MinimizeToTray { get; set; } = false;
+
+    /// <summary>
+    /// Start application minimized.
+    /// </summary>
+    public bool StartMinimized { get; set; } = false;
+
+    /// <summary>
+    /// Enable debug logging to file.
+    /// </summary>
+    public bool EnableLogging { get; set; } = false;
+
+    /// <summary>
+    /// Log file path (relative to app directory or absolute).
+    /// </summary>
+    public string LogFilePath { get; set; } = "logs/gamingvision.log";
+
+    /// <summary>
+    /// Check for updates on startup.
+    /// </summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>
+    /// Creates default app configuration.
+    /// </summary>
+    public static AppConfiguration CreateDefault() => new()
     {
-        if (string.IsNullOrEmpty(SelectedGame))
-            return null;
-
-        return Games.TryGetValue(SelectedGame, out var profile) ? profile : null;
-    }
-
-    /// <summary>
-    /// Creates a default configuration with sample game profiles.
-    /// </summary>
-    public static AppConfiguration CreateDefault()
-    {
-        var config = new AppConfiguration
-        {
-            Version = "1.0",
-            SelectedGame = "nomanssky",
-            Application = new ApplicationSettings
-            {
-                UseDirectML = true,
-                AutoStartDetection = false,
-                MinimizeToTray = false,
-                StartMinimized = false,
-                EnableLogging = false,
-                LogFilePath = "logs/gamingvision.log",
-                CheckForUpdates = true,
-                Accessibility = new AccessibilitySettings
-                {
-                    HighContrast = false,
-                    LargeText = false
-                }
-            }
-        };
-
-        // No Man's Sky profile
-        config.Games["nomanssky"] = new GameProfile
-        {
-            DisplayName = "No Man's Sky",
-            ModelFile = "models/nomanssky.onnx",
-            WindowTitle = "No Man's Sky",
-            PrimaryLabels = ["title", "item", "resource"],
-            SecondaryLabels = ["info", "quest", "waypoint"],
-            LabelPriority = ["title", "item", "resource", "info", "quest", "waypoint"],
-            Hotkeys = new HotkeySettings
-            {
-                ReadPrimary = "Alt+1",
-                ReadSecondary = "Alt+2",
-                StopReading = "Alt+3",
-                ToggleDetection = "Alt+4",
-                Quit = "Alt+Q"
-            },
-            Capture = new CaptureSettings
-            {
-                Method = "window",
-                MonitorIndex = 0
-            },
-            Tts = new TtsSettings
-            {
-                Engine = "sapi",
-                PrimaryVoice = "",
-                PrimaryRate = 3,
-                SecondaryVoice = "",
-                SecondaryRate = 0,
-                Volume = 100
-            },
-            Detection = new DetectionSettings
-            {
-                AutoReadCooldown = 2000,
-                ConfidenceThreshold = 0.5f
-            }
-        };
-
-        return config;
-    }
+        Version = "1.0",
+        SelectedGame = "no_mans_sky",
+        UseDirectML = true,
+        AutoStartDetection = false,
+        MinimizeToTray = false,
+        StartMinimized = false,
+        EnableLogging = false,
+        LogFilePath = "logs/gamingvision.log",
+        CheckForUpdates = true
+    };
 }

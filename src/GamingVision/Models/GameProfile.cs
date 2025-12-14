@@ -3,9 +3,15 @@ namespace GamingVision.Models;
 /// <summary>
 /// Complete configuration profile for a single game.
 /// All settings are per-game to allow different configurations for different games.
+/// Stored in GameModels/{gameId}/game_config.json.
 /// </summary>
 public class GameProfile
 {
+    /// <summary>
+    /// Unique identifier for this game (matches folder name in GameModels).
+    /// </summary>
+    public string GameId { get; set; } = string.Empty;
+
     /// <summary>
     /// Human-readable name shown in the launcher.
     /// </summary>
@@ -61,6 +67,7 @@ public class GameProfile
     /// </summary>
     public GameProfile Clone() => new()
     {
+        GameId = GameId,
         DisplayName = DisplayName,
         ModelFile = ModelFile,
         WindowTitle = WindowTitle,

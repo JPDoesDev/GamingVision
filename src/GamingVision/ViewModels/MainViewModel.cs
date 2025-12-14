@@ -18,7 +18,7 @@ namespace GamingVision.ViewModels;
 public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly ConfigManager _configManager;
-    private AppConfiguration _config;
+    private AppConfiguration _appConfig;
     private ScreenCaptureManager? _captureManager;
     private DetectionManager? _detectionManager;
     private IOcrService? _ocrService;
@@ -72,7 +72,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public MainViewModel()
     {
         _configManager = new ConfigManager();
-        _config = AppConfiguration.CreateDefault();
+        _appConfig = AppConfiguration.CreateDefault();
     }
 
     /// <summary>
@@ -90,10 +90,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task InitializeAsync()
     {
-        _config = await _configManager.LoadAsync();
+        _appConfig = await _configManager.LoadAppSettingsAsync();
+        await _configManager.LoadAllGameProfilesAsync();
         LoadGames();
         UpdateGpuInfo();
         RegisterHotkeys();
+    }
+
+    /// <summary>
+    /// Gets the currently selected game profile.
+    /// </summary>
+    private GameProfile? GetSelectedGameProfile()
+    {
+        if (string.IsNullOrEmpty(_appConfig.SelectedGame))
+            return null;
+
+        return _configManager.GetGameProfile(_appConfig.SelectedGame);
     }
 
     /// <summary>
@@ -104,7 +116,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_hotkeyService == null || !_hotkeyService.IsInitialized)
             return;
 
-        var profile = _config.GetSelectedGameProfile();
+        var profile = GetSelectedGameProfile();
         if (profile == null)
             return;
 
@@ -286,17 +298,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Games.Clear();
 
-        foreach (var (key, profile) in _config.Games)
+        foreach (var (gameId, profile) in _configManager.GameProfiles)
         {
             Games.Add(new GameProfileItem
             {
-                Key = key,
+                Key = gameId,
                 DisplayName = profile.DisplayName
             });
         }
 
         // Select the previously selected game
-        SelectedGame = Games.FirstOrDefault(g => g.Key == _config.SelectedGame)
+        SelectedGame = Games.FirstOrDefault(g => g.Key == _appConfig.SelectedGame)
                        ?? Games.FirstOrDefault();
     }
 
@@ -304,17 +316,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (value == null) return;
 
-        _config.SelectedGame = value.Key;
+        _appConfig.SelectedGame = value.Key;
         UpdateHotkeyDisplay();
         RegisterHotkeys(); // Re-register hotkeys for the new game profile
 
         // Save the selection
-        Task.Run(async () => await _configManager.SaveAsync(_config));
+        Task.Run(async () => await _configManager.SaveAppSettingsAsync(_appConfig));
     }
 
     private void UpdateHotkeyDisplay()
     {
-        var profile = _config.GetSelectedGameProfile();
+        var profile = GetSelectedGameProfile();
         if (profile == null) return;
 
         HotkeyReadPrimary = profile.Hotkeys.ReadPrimary;
@@ -365,7 +377,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task StartDetectionAsync()
     {
-        var profile = _config.GetSelectedGameProfile();
+        var profile = GetSelectedGameProfile();
         if (profile == null)
         {
             DetectionStatus = "No game selected";
@@ -381,16 +393,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         DetectionStatus = "Loading model...";
         ModelStatus = "Loading...";
 
-        // Get models directory
-        var modelsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
-        if (!Directory.Exists(modelsDir))
-        {
-            Directory.CreateDirectory(modelsDir);
-        }
+        // Get model path from GameModels directory
+        var modelPath = _configManager.GetModelPath(profile.GameId, profile.ModelFile);
 
-        if (!await _detectionManager.InitializeAsync(profile, modelsDir))
+        if (!await _detectionManager.InitializeAsync(profile, Path.GetDirectoryName(modelPath)!))
         {
-            var modelPath = Path.Combine(modelsDir, profile.ModelFile);
             if (!File.Exists(modelPath))
             {
                 DetectionStatus = $"Model not found: {profile.ModelFile}";
@@ -596,38 +603,74 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void OpenGameSettings()
+    private async Task OpenGameSettingsAsync()
     {
-        var settingsWindow = new Views.GameSettingsWindow(_config, _configManager);
+        // Stop detection before changing settings
+        var wasRunning = IsDetectionRunning;
+        if (wasRunning)
+        {
+            StopDetection();
+        }
+
+        var settingsWindow = new Views.GameSettingsWindow(_appConfig, _configManager);
         settingsWindow.Owner = System.Windows.Application.Current.MainWindow;
 
         if (settingsWindow.ShowDialog() == true)
         {
-            // Reload config in case it was changed
-            Task.Run(async () =>
+            // Reload configs from disk to get saved changes
+            _appConfig = await _configManager.LoadAppSettingsAsync();
+            await _configManager.LoadAllGameProfilesAsync();
+
+            // Refresh UI
+            LoadGames();
+            UpdateHotkeyDisplay();
+
+            // Re-register hotkeys with potentially new keybindings
+            RegisterHotkeys();
+
+            // Restart detection if it was running before
+            if (wasRunning)
             {
-                _config = await _configManager.LoadAsync();
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                {
-                    LoadGames();
-                    UpdateHotkeyDisplay();
-                });
-            });
+                await StartDetectionAsync();
+            }
         }
     }
 
     [RelayCommand]
-    private void OpenAppSettings()
+    private async Task OpenAppSettingsAsync()
     {
-        var settingsWindow = new Views.AppSettingsWindow(_config, _configManager);
+        // Stop detection before changing settings
+        var wasRunning = IsDetectionRunning;
+        if (wasRunning)
+        {
+            StopDetection();
+        }
+
+        var settingsWindow = new Views.AppSettingsWindow(_appConfig, _configManager);
         settingsWindow.Owner = System.Windows.Application.Current.MainWindow;
-        settingsWindow.ShowDialog();
+
+        if (settingsWindow.ShowDialog() == true)
+        {
+            // Reload config from disk to get saved changes
+            _appConfig = await _configManager.LoadAppSettingsAsync();
+
+            // Restart detection if it was running (will use new settings like DirectML toggle)
+            if (wasRunning)
+            {
+                await StartDetectionAsync();
+            }
+        }
     }
 
     /// <summary>
-    /// Gets the current configuration.
+    /// Gets the current app configuration.
     /// </summary>
-    public AppConfiguration Configuration => _config;
+    public AppConfiguration AppConfig => _appConfig;
+
+    /// <summary>
+    /// Gets the config manager for accessing game profiles.
+    /// </summary>
+    public ConfigManager ConfigManager => _configManager;
 
     public void Dispose()
     {

@@ -16,10 +16,9 @@ namespace GamingVision.ViewModels;
 /// </summary>
 public partial class GameSettingsViewModel : ObservableObject
 {
-    private readonly AppConfiguration _config;
+    private readonly AppConfiguration _appConfig;
     private readonly ConfigManager _configManager;
     private GameProfile? _currentProfile;
-    private string _currentProfileKey = "";
 
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
@@ -101,9 +100,9 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private float _confidenceThreshold = 0.5f;
 
-    public GameSettingsViewModel(AppConfiguration config, ConfigManager configManager)
+    public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
-        _config = config;
+        _appConfig = appConfig;
         _configManager = configManager;
 
         LoadAvailableVoices();
@@ -134,16 +133,16 @@ public partial class GameSettingsViewModel : ObservableObject
     {
         Games.Clear();
 
-        foreach (var (key, profile) in _config.Games)
+        foreach (var (gameId, profile) in _configManager.GameProfiles)
         {
             Games.Add(new GameProfileItem
             {
-                Key = key,
+                Key = gameId,
                 DisplayName = profile.DisplayName
             });
         }
 
-        SelectedGame = Games.FirstOrDefault(g => g.Key == _config.SelectedGame)
+        SelectedGame = Games.FirstOrDefault(g => g.Key == _appConfig.SelectedGame)
                        ?? Games.FirstOrDefault();
     }
 
@@ -151,8 +150,7 @@ public partial class GameSettingsViewModel : ObservableObject
     {
         if (value == null) return;
 
-        _config.Games.TryGetValue(value.Key, out _currentProfile);
-        _currentProfileKey = value.Key;
+        _currentProfile = _configManager.GetGameProfile(value.Key);
         LoadProfileSettings();
     }
 
@@ -248,7 +246,19 @@ public partial class GameSettingsViewModel : ObservableObject
     private async Task SaveAsync()
     {
         SaveProfileSettings();
-        await _configManager.SaveAsync(_config);
+
+        // Save game profile to its own file
+        if (_currentProfile != null)
+        {
+            await _configManager.SaveGameProfileAsync(_currentProfile);
+        }
+
+        // Update selected game in app settings if changed
+        if (SelectedGame != null && _appConfig.SelectedGame != SelectedGame.Key)
+        {
+            _appConfig.SelectedGame = SelectedGame.Key;
+            await _configManager.SaveAppSettingsAsync(_appConfig);
+        }
     }
 
     /// <summary>
@@ -261,16 +271,18 @@ public partial class GameSettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void AddGame()
+    private async Task AddGameAsync()
     {
         // Generate a unique key
         var key = $"game_{DateTime.Now:yyyyMMddHHmmss}";
         var newProfile = new GameProfile
         {
+            GameId = key,
             DisplayName = "New Game"
         };
 
-        _config.Games[key] = newProfile;
+        // Save to file
+        await _configManager.SaveGameProfileAsync(newProfile);
 
         var item = new GameProfileItem
         {
@@ -295,19 +307,18 @@ public partial class GameSettingsViewModel : ObservableObject
         var newSelection = Games.FirstOrDefault(g => g.Key != keyToDelete);
         SelectedGame = newSelection;
 
-        // Remove from config and list
-        _config.Games.Remove(keyToDelete);
+        // Remove from config manager and list
+        await _configManager.DeleteGameProfileAsync(keyToDelete);
         Games.Remove(gameToDelete);
 
-        // Update selected game in config
+        // Update selected game in app config
         if (newSelection != null)
         {
-            _config.SelectedGame = newSelection.Key;
+            _appConfig.SelectedGame = newSelection.Key;
+            await _configManager.SaveAppSettingsAsync(_appConfig);
         }
 
         CanDeleteGame = Games.Count > 1;
-
-        await _configManager.SaveAsync(_config);
     }
 
     [RelayCommand]
@@ -317,12 +328,13 @@ public partial class GameSettingsViewModel : ObservableObject
         {
             Title = "Select ONNX Model File",
             Filter = "ONNX Models (*.onnx)|*.onnx|All Files (*.*)|*.*",
-            InitialDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models")
+            InitialDirectory = _configManager.GameModelsDirectory
         };
 
         if (dialog.ShowDialog() == true)
         {
-            ModelFile = dialog.FileName;
+            // Store just the filename, as models should be in the game's folder
+            ModelFile = Path.GetFileName(dialog.FileName);
         }
     }
 

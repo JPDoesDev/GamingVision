@@ -40,9 +40,34 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="config.json">
+    <None Update="app_settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!-- Include GameModels folder with per-game ONNX models and config files -->
+  <ItemGroup>
+    <Content Include="..\..\GameModels\**\*.onnx">
+      <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\GameModels\**\*.json">
+      <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\GameModels\**\*.txt">
+      <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Clean up empty platform folders created by ONNX Runtime DirectML package -->
+  <Target Name="CleanupUnusedPlatformFolders" AfterTargets="Build">
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\ARM" Condition="Exists('$(MSBuildProjectDirectory)\bin\ARM')" />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\ARM64" Condition="Exists('$(MSBuildProjectDirectory)\bin\ARM64')" />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Win32" Condition="Exists('$(MSBuildProjectDirectory)\bin\Win32')" />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Gaming.Xbox.Scarlett.x64" Condition="Exists('$(MSBuildProjectDirectory)\bin\Gaming.Xbox.Scarlett.x64')" />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Release" Condition="Exists('$(MSBuildProjectDirectory)\bin\Release')" />
+  </Target>
 
 </Project>

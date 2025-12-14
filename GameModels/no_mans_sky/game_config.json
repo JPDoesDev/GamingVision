@@ -1,0 +1,55 @@
+{
+  "gameId": "no_mans_sky",
+  "displayName": "No Man\u0027s Sky",
+  "modelFile": "NoMansModel.onnx",
+  "windowTitle": "No Man\u0027s Sky",
+  "primaryLabels": [
+    "title",
+    "item",
+    "resource",
+    "waypoint"
+  ],
+  "secondaryLabels": [
+    "info",
+    "quest"
+  ],
+  "labelPriority": [
+    "title",
+    "item",
+    "resource",
+    "info",
+    "quest",
+    "waypoint"
+  ],
+  "hotkeys": {
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "stopReading": "Alt\u002B3",
+    "toggleDetection": "Alt\u002B4",
+    "quit": "Alt\u002BQ"
+  },
+  "capture": {
+    "method": "fullscreen",
+    "monitorIndex": 0,
+    "captureCursor": false,
+    "scaleFactor": 1,
+    "regionOfInterest": ""
+  },
+  "tts": {
+    "engine": "piper",
+    "primaryVoice": "Microsoft David Desktop",
+    "primaryRate": 3,
+    "secondaryVoice": "Microsoft Zira Desktop",
+    "secondaryRate": 0,
+    "volume": 100
+  },
+  "detection": {
+    "autoReadCooldown": 1000,
+    "confidenceThreshold": 0.5,
+    "nmsThreshold": 0.45,
+    "maxDetections": 100,
+    "targetFps": 10,
+    "autoReadEnabled": true,
+    "onlyReadChanges": true
+  }
+}

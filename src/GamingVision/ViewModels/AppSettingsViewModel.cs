@@ -10,24 +10,18 @@ namespace GamingVision.ViewModels;
 /// </summary>
 public partial class AppSettingsViewModel : ObservableObject
 {
-    private readonly AppConfiguration _config;
+    private readonly AppConfiguration _appConfig;
     private readonly ConfigManager _configManager;
 
     [ObservableProperty]
     private bool _useDirectML;
 
     [ObservableProperty]
-    private bool _highContrast;
-
-    [ObservableProperty]
-    private bool _largeText;
-
-    [ObservableProperty]
     private string _gpuName = "Detecting...";
 
-    public AppSettingsViewModel(AppConfiguration config, ConfigManager configManager)
+    public AppSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
-        _config = config;
+        _appConfig = appConfig;
         _configManager = configManager;
 
         LoadSettings();
@@ -36,9 +30,7 @@ public partial class AppSettingsViewModel : ObservableObject
 
     private void LoadSettings()
     {
-        UseDirectML = _config.Application.UseDirectML;
-        HighContrast = _config.Application.Accessibility.HighContrast;
-        LargeText = _config.Application.Accessibility.LargeText;
+        UseDirectML = _appConfig.UseDirectML;
     }
 
     private void DetectGpu()
@@ -57,16 +49,14 @@ public partial class AppSettingsViewModel : ObservableObject
 
     private void SaveSettings()
     {
-        _config.Application.UseDirectML = UseDirectML;
-        _config.Application.Accessibility.HighContrast = HighContrast;
-        _config.Application.Accessibility.LargeText = LargeText;
+        _appConfig.UseDirectML = UseDirectML;
     }
 
     [RelayCommand]
     private async Task SaveAsync()
     {
         SaveSettings();
-        await _configManager.SaveAsync(_config);
+        await _configManager.SaveAppSettingsAsync(_appConfig);
     }
 
     /// <summary>

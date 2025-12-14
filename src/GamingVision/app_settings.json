@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "selectedGame": "no_mans_sky",
+  "useDirectML": true,
+  "autoStartDetection": false,
+  "minimizeToTray": false,
+  "startMinimized": false,
+  "enableLogging": false,
+  "logFilePath": "logs/gamingvision.log",
+  "checkForUpdates": true
+}
