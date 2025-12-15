@@ -6,9 +6,9 @@
         xmlns:vm="clr-namespace:GamingVision.ViewModels"
         mc:Ignorable="d"
         Title="GamingVision - Accessibility Tool for Gamers"
-        Height="550"
+        Height="660"
         Width="600"
-        MinHeight="500"
+        MinHeight="620"
         MinWidth="550"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip"
@@ -113,14 +113,7 @@
         </GroupBox>
 
         <!-- Hotkeys -->
-        <GroupBox Grid.Row="3" AutomationProperties.Name="Hotkeys for selected game">
-            <GroupBox.Header>
-                <TextBlock>
-                    <Run Text="Hotkeys ("/>
-                    <Run Text="{Binding SelectedGame.DisplayName, FallbackValue='No Game'}"/>
-                    <Run Text=")"/>
-                </TextBlock>
-            </GroupBox.Header>
+        <GroupBox Grid.Row="3" Header="Keyboard Shortcuts" AutomationProperties.Name="Keyboard Shortcuts">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -151,6 +144,10 @@
                 </TextBlock>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4">
+                    <Run Text="{Binding HotkeyReadTertiary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                    <Run Text=": Read Tertiary"/>
+                </TextBlock>
+                <TextBlock Grid.Row="2" Grid.Column="1" Margin="15,4">
                     <Run Text="{Binding HotkeyQuit, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
                     <Run Text=": Quit"/>
                 </TextBlock>

@@ -49,6 +49,9 @@ public partial class GameSettingsViewModel : ObservableObject
     private string _secondaryLabels = "";
 
     [ObservableProperty]
+    private string _tertiaryLabels = "";
+
+    [ObservableProperty]
     private bool _canDeleteGame;
 
     // Capture settings
@@ -75,6 +78,12 @@ public partial class GameSettingsViewModel : ObservableObject
     private int _secondaryRate;
 
     [ObservableProperty]
+    private string _tertiaryVoice = "";
+
+    [ObservableProperty]
+    private int _tertiaryRate;
+
+    [ObservableProperty]
     private int _volume = 100;
 
     // Hotkey settings
@@ -85,10 +94,13 @@ public partial class GameSettingsViewModel : ObservableObject
     private string _hotkeyReadSecondary = "Alt+2";
 
     [ObservableProperty]
-    private string _hotkeyStopReading = "Alt+3";
+    private string _hotkeyReadTertiary = "Alt+3";
 
     [ObservableProperty]
-    private string _hotkeyToggleDetection = "Alt+4";
+    private string _hotkeyStopReading = "Alt+4";
+
+    [ObservableProperty]
+    private string _hotkeyToggleDetection = "Alt+5";
 
     [ObservableProperty]
     private string _hotkeyQuit = "Alt+Q";
@@ -112,6 +124,12 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _readSecondaryLabelAloud = false;
 
+    [ObservableProperty]
+    private bool _readTertiaryLabelAloud = false;
+
+    [ObservableProperty]
+    private string _availableLabelsInfo = "";
+
     public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
         _appConfig = appConfig;
@@ -119,6 +137,14 @@ public partial class GameSettingsViewModel : ObservableObject
 
         LoadAvailableVoices();
         LoadGames();
+    }
+
+    /// <summary>
+    /// Gets the available labels from the current profile's LabelPriority list.
+    /// </summary>
+    public List<string> GetAvailableLabels()
+    {
+        return _currentProfile?.LabelPriority ?? [];
     }
 
     private void LoadAvailableVoices()
@@ -176,6 +202,7 @@ public partial class GameSettingsViewModel : ObservableObject
         WindowTitle = _currentProfile.WindowTitle;
         PrimaryLabels = string.Join(", ", _currentProfile.PrimaryLabels);
         SecondaryLabels = string.Join(", ", _currentProfile.SecondaryLabels);
+        TertiaryLabels = string.Join(", ", _currentProfile.TertiaryLabels);
 
         // Can only delete if there's more than one game
         CanDeleteGame = Games.Count > 1;
@@ -190,11 +217,14 @@ public partial class GameSettingsViewModel : ObservableObject
         PrimaryRate = _currentProfile.Tts.PrimaryRate;
         SecondaryVoice = _currentProfile.Tts.SecondaryVoice;
         SecondaryRate = _currentProfile.Tts.SecondaryRate;
+        TertiaryVoice = _currentProfile.Tts.TertiaryVoice;
+        TertiaryRate = _currentProfile.Tts.TertiaryRate;
         Volume = _currentProfile.Tts.Volume;
 
         // Hotkeys
         HotkeyReadPrimary = _currentProfile.Hotkeys.ReadPrimary;
         HotkeyReadSecondary = _currentProfile.Hotkeys.ReadSecondary;
+        HotkeyReadTertiary = _currentProfile.Hotkeys.ReadTertiary;
         HotkeyStopReading = _currentProfile.Hotkeys.StopReading;
         HotkeyToggleDetection = _currentProfile.Hotkeys.ToggleDetection;
         HotkeyQuit = _currentProfile.Hotkeys.Quit;
@@ -206,6 +236,7 @@ public partial class GameSettingsViewModel : ObservableObject
         AutoReadConfidenceThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
         ReadPrimaryLabelAloud = _currentProfile.Detection.ReadPrimaryLabelAloud;
         ReadSecondaryLabelAloud = _currentProfile.Detection.ReadSecondaryLabelAloud;
+        ReadTertiaryLabelAloud = _currentProfile.Detection.ReadTertiaryLabelAloud;
     }
 
     private void SaveProfileSettings()
@@ -218,6 +249,7 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.WindowTitle = WindowTitle;
         _currentProfile.PrimaryLabels = ParseLabelList(PrimaryLabels);
         _currentProfile.SecondaryLabels = ParseLabelList(SecondaryLabels);
+        _currentProfile.TertiaryLabels = ParseLabelList(TertiaryLabels);
 
         // Update display name in list
         if (SelectedGame != null)
@@ -235,11 +267,14 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Tts.PrimaryRate = PrimaryRate;
         _currentProfile.Tts.SecondaryVoice = SecondaryVoice;
         _currentProfile.Tts.SecondaryRate = SecondaryRate;
+        _currentProfile.Tts.TertiaryVoice = TertiaryVoice;
+        _currentProfile.Tts.TertiaryRate = TertiaryRate;
         _currentProfile.Tts.Volume = Volume;
 
         // Hotkeys
         _currentProfile.Hotkeys.ReadPrimary = HotkeyReadPrimary;
         _currentProfile.Hotkeys.ReadSecondary = HotkeyReadSecondary;
+        _currentProfile.Hotkeys.ReadTertiary = HotkeyReadTertiary;
         _currentProfile.Hotkeys.StopReading = HotkeyStopReading;
         _currentProfile.Hotkeys.ToggleDetection = HotkeyToggleDetection;
         _currentProfile.Hotkeys.Quit = HotkeyQuit;
@@ -251,6 +286,7 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Detection.AutoReadConfidenceThreshold = AutoReadConfidenceThreshold;
         _currentProfile.Detection.ReadPrimaryLabelAloud = ReadPrimaryLabelAloud;
         _currentProfile.Detection.ReadSecondaryLabelAloud = ReadSecondaryLabelAloud;
+        _currentProfile.Detection.ReadTertiaryLabelAloud = ReadTertiaryLabelAloud;
     }
 
     private static List<string> ParseLabelList(string input)

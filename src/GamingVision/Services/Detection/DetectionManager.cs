@@ -123,6 +123,10 @@ public class DetectionManager : IDisposable
                 .Where(d => _currentProfile.SecondaryLabels.Contains(d.Label))
                 .ToList();
 
+            var tertiaryDetections = detections
+                .Where(d => _currentProfile.TertiaryLabels.Contains(d.Label))
+                .ToList();
+
             // Filter primary detections by higher auto-read threshold for automatic reading
             var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
             var autoReadPrimaryDetections = primaryDetections
@@ -135,6 +139,7 @@ public class DetectionManager : IDisposable
                 AllDetections = detections,
                 PrimaryDetections = primaryDetections,
                 SecondaryDetections = secondaryDetections,
+                TertiaryDetections = tertiaryDetections,
                 Timestamp = DateTime.UtcNow
             });
 
@@ -237,6 +242,21 @@ public class DetectionManager : IDisposable
         {
             return SortByPriority(
                 _lastDetections.Where(d => _currentProfile.SecondaryLabels.Contains(d.Label)).ToList(),
+                _currentProfile.LabelPriority);
+        }
+    }
+
+    /// <summary>
+    /// Gets all current tertiary detections sorted by priority.
+    /// </summary>
+    public List<DetectedObject> GetCurrentTertiaryDetections()
+    {
+        if (_currentProfile == null) return [];
+
+        lock (_detectionLock)
+        {
+            return SortByPriority(
+                _lastDetections.Where(d => _currentProfile.TertiaryLabels.Contains(d.Label)).ToList(),
                 _currentProfile.LabelPriority);
         }
     }
@@ -401,6 +421,7 @@ public class DetectionEventArgs : EventArgs
     public List<DetectedObject> AllDetections { get; init; } = [];
     public List<DetectedObject> PrimaryDetections { get; init; } = [];
     public List<DetectedObject> SecondaryDetections { get; init; } = [];
+    public List<DetectedObject> TertiaryDetections { get; init; } = [];
     public DateTime Timestamp { get; init; }
 }
 

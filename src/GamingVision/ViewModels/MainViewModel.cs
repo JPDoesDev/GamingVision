@@ -61,10 +61,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _hotkeyReadSecondary = "Alt+2";
 
     [ObservableProperty]
-    private string _hotkeyStopReading = "Alt+3";
+    private string _hotkeyReadTertiary = "Alt+3";
 
     [ObservableProperty]
-    private string _hotkeyToggleDetection = "Alt+4";
+    private string _hotkeyStopReading = "Alt+4";
+
+    [ObservableProperty]
+    private string _hotkeyToggleDetection = "Alt+5";
 
     [ObservableProperty]
     private string _hotkeyQuit = "Alt+Q";
@@ -90,11 +93,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task InitializeAsync()
     {
+        Logger.Log("Initializing MainViewModel");
         _appConfig = await _configManager.LoadAppSettingsAsync();
         await _configManager.LoadAllGameProfilesAsync();
         LoadGames();
         UpdateGpuInfo();
         RegisterHotkeys();
+        Logger.Log("MainViewModel initialized");
     }
 
     /// <summary>
@@ -124,11 +129,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         _hotkeyService.RegisterHotkey(HotkeyId.ReadPrimary, profile.Hotkeys.ReadPrimary);
         _hotkeyService.RegisterHotkey(HotkeyId.ReadSecondary, profile.Hotkeys.ReadSecondary);
+        _hotkeyService.RegisterHotkey(HotkeyId.ReadTertiary, profile.Hotkeys.ReadTertiary);
         _hotkeyService.RegisterHotkey(HotkeyId.StopReading, profile.Hotkeys.StopReading);
         _hotkeyService.RegisterHotkey(HotkeyId.ToggleDetection, profile.Hotkeys.ToggleDetection);
         _hotkeyService.RegisterHotkey(HotkeyId.Quit, profile.Hotkeys.Quit);
 
-        System.Diagnostics.Debug.WriteLine("Hotkeys registered");
+        Logger.Log("Hotkeys registered");
     }
 
     /// <summary>
@@ -136,29 +142,40 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async void OnHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"Hotkey pressed: {e.HotkeyId}");
-
-        switch (e.HotkeyId)
+        try
         {
-            case HotkeyId.ReadPrimary:
-                await ReadPrimaryObjectsAsync();
-                break;
+            Logger.Log($"Hotkey pressed: {e.HotkeyId}");
 
-            case HotkeyId.ReadSecondary:
-                await ReadSecondaryObjectsAsync();
-                break;
+            switch (e.HotkeyId)
+            {
+                case HotkeyId.ReadPrimary:
+                    await ReadPrimaryObjectsAsync();
+                    break;
 
-            case HotkeyId.StopReading:
-                StopReading();
-                break;
+                case HotkeyId.ReadSecondary:
+                    await ReadSecondaryObjectsAsync();
+                    break;
 
-            case HotkeyId.ToggleDetection:
-                await ToggleDetectionAsync();
-                break;
+                case HotkeyId.ReadTertiary:
+                    await ReadTertiaryObjectsAsync();
+                    break;
 
-            case HotkeyId.Quit:
-                QuitApplication();
-                break;
+                case HotkeyId.StopReading:
+                    StopReading();
+                    break;
+
+                case HotkeyId.ToggleDetection:
+                    await ToggleDetectionAsync();
+                    break;
+
+                case HotkeyId.Quit:
+                    QuitApplication();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("OnHotkeyPressed error", ex);
         }
     }
 
@@ -182,7 +199,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var primaryDetections = _detectionManager.GetCurrentPrimaryDetections();
         if (primaryDetections.Count == 0)
         {
-            await _ttsService.SpeakAsync("No primary objects detected", interrupt: true);
+            await SpeakWithVoiceAsync("No primary objects detected", SpeechTier.Primary, interrupt: true);
             return;
         }
 
@@ -198,7 +215,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            await _ttsService.SpeakAsync(detection.Label, interrupt: true);
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
             return;
         }
 
@@ -223,7 +240,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrEmpty(speechText))
         {
-            await _ttsService.SpeakAsync(speechText, interrupt: true);
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
         }
 
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -252,7 +269,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var secondaryDetections = _detectionManager.GetCurrentSecondaryDetections();
         if (secondaryDetections.Count == 0)
         {
-            await _ttsService.SpeakAsync("No secondary objects detected", interrupt: true);
+            await SpeakWithVoiceAsync("No secondary objects detected", SpeechTier.Secondary, interrupt: true);
             return;
         }
 
@@ -268,7 +285,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            await _ttsService.SpeakAsync(detection.Label, interrupt: true);
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Secondary, interrupt: true);
             return;
         }
 
@@ -293,13 +310,122 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrEmpty(speechText))
         {
-            await _ttsService.SpeakAsync(speechText, interrupt: true);
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Secondary, interrupt: true);
         }
 
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             LastReadText = displayText;
         });
+    }
+
+    /// <summary>
+    /// Reads the highest priority tertiary object on demand.
+    /// </summary>
+    private async Task ReadTertiaryObjectsAsync()
+    {
+        if (_detectionManager == null || !IsDetectionRunning)
+        {
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        if (_ttsService == null)
+            return;
+
+        var profile = GetSelectedGameProfile();
+        var readLabelAloud = profile?.Detection.ReadTertiaryLabelAloud ?? false;
+
+        var tertiaryDetections = _detectionManager.GetCurrentTertiaryDetections();
+        if (tertiaryDetections.Count == 0)
+        {
+            await SpeakWithVoiceAsync("No tertiary objects detected", SpeechTier.Tertiary, interrupt: true);
+            return;
+        }
+
+        // Get highest priority detection (list is already sorted by priority)
+        var detection = tertiaryDetections[0];
+
+        // Get frame for OCR
+        CapturedFrame? frame;
+        lock (_frameLock)
+        {
+            frame = _latestFrame;
+        }
+
+        if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
+        {
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Tertiary, interrupt: true);
+            return;
+        }
+
+        // Extract text from the highest priority detection region
+        var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
+        var textResults = await _ocrService.ExtractTextFromRegionsAsync(
+            frame.Data, frame.Width, frame.Height, frame.Stride, regions);
+
+        string displayText;
+        string speechText;
+
+        if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
+        {
+            displayText = $"{detection.Label}: {text}";
+            speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+        }
+        else
+        {
+            displayText = detection.Label;
+            speechText = readLabelAloud ? detection.Label : "";
+        }
+
+        if (!string.IsNullOrEmpty(speechText))
+        {
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Tertiary, interrupt: true);
+        }
+
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            LastReadText = displayText;
+        });
+    }
+
+    /// <summary>
+    /// Sets the TTS voice and rate for the specified tier, then speaks.
+    /// </summary>
+    private async Task SpeakWithVoiceAsync(string text, SpeechTier tier, bool interrupt = false)
+    {
+        try
+        {
+            if (_ttsService == null || !_ttsService.IsReady || string.IsNullOrEmpty(text))
+                return;
+
+            var profile = GetSelectedGameProfile();
+            if (profile == null)
+                return;
+
+            // Set voice and rate based on tier
+            switch (tier)
+            {
+                case SpeechTier.Primary:
+                    _ttsService.SetVoice(profile.Tts.PrimaryVoice ?? "");
+                    _ttsService.SetRate(profile.Tts.PrimaryRate);
+                    break;
+                case SpeechTier.Secondary:
+                    _ttsService.SetVoice(profile.Tts.SecondaryVoice ?? "");
+                    _ttsService.SetRate(profile.Tts.SecondaryRate);
+                    break;
+                case SpeechTier.Tertiary:
+                    _ttsService.SetVoice(profile.Tts.TertiaryVoice ?? "");
+                    _ttsService.SetRate(profile.Tts.TertiaryRate);
+                    break;
+            }
+
+            await _ttsService.SpeakAsync(text, interrupt);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("SpeakWithVoiceAsync error", ex);
+        }
     }
 
     /// <summary>
@@ -359,6 +485,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         HotkeyReadPrimary = profile.Hotkeys.ReadPrimary;
         HotkeyReadSecondary = profile.Hotkeys.ReadSecondary;
+        HotkeyReadTertiary = profile.Hotkeys.ReadTertiary;
         HotkeyStopReading = profile.Hotkeys.StopReading;
         HotkeyToggleDetection = profile.Hotkeys.ToggleDetection;
         HotkeyQuit = profile.Hotkeys.Quit;
@@ -405,9 +532,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task StartDetectionAsync()
     {
+        Logger.Log("Starting detection");
         var profile = GetSelectedGameProfile();
         if (profile == null)
         {
+            Logger.Warn("No game profile selected");
             DetectionStatus = "No game selected";
             return;
         }
@@ -500,6 +629,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void StopDetection()
     {
+        Logger.Log("Stopping detection");
         _captureManager?.Stop();
         _ttsService?.Stop();
         _ttsService?.ClearQueue();
@@ -519,36 +649,47 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async void OnFrameCaptured(object? sender, CapturedFrame e)
     {
-        _frameCount++;
-
-        // Store latest frame for OCR processing
-        lock (_frameLock)
+        try
         {
-            _latestFrame = e;
-        }
+            _frameCount++;
 
-        // Run detection on this frame
-        if (_detectionManager != null && _detectionManager.DetectionService.IsReady)
-        {
-            try
+            // Store frame dimensions before they might become invalid
+            var frameWidth = e.Width;
+            var frameHeight = e.Height;
+
+            // Store latest frame for OCR processing
+            lock (_frameLock)
             {
-                var detections = await _detectionManager.ProcessFrameAsync(e);
-                _detectionCount = detections.Count;
+                _latestFrame = e;
             }
-            catch (Exception ex)
+
+            // Run detection on this frame
+            if (_detectionManager != null && _detectionManager.DetectionService.IsReady)
             {
-                System.Diagnostics.Debug.WriteLine($"Detection error: {ex.Message}");
+                try
+                {
+                    var detections = await _detectionManager.ProcessFrameAsync(e);
+                    _detectionCount = detections.Count;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Detection error in frame processing", ex);
+                }
+            }
+
+            // Update UI every 10 frames to avoid excessive updates
+            if (_frameCount % 10 == 0)
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    DetectionStatus = $"Running (Frame {_frameCount}, {frameWidth}x{frameHeight})";
+                    CurrentDetectionCount = _detectionCount;
+                });
             }
         }
-
-        // Update UI every 10 frames to avoid excessive updates
-        if (_frameCount % 10 == 0)
+        catch (Exception ex)
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                DetectionStatus = $"Running (Frame {_frameCount}, {e.Width}x{e.Height})";
-                CurrentDetectionCount = _detectionCount;
-            });
+            Logger.Error("OnFrameCaptured error", ex);
         }
     }
 
@@ -564,7 +705,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void OnLabelDisappeared(object? sender, LabelDisappearedEventArgs e)
     {
         // Label disappeared or moved to different object - cancel any ongoing TTS
-        System.Diagnostics.Debug.WriteLine($"Label disappeared: {e.Label} (MovedToNew: {e.MovedToNewObject}, FramesMissing: {e.FramesMissing})");
+        Logger.Log($"Label disappeared: {e.Label} (MovedToNew: {e.MovedToNewObject}, FramesMissing: {e.FramesMissing})");
 
         // Cancel current speech and clear queue
         _ttsService?.Stop();
@@ -580,33 +721,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (e.Detections.Count == 0)
             return;
 
-        // Check settings
-        var profile = GetSelectedGameProfile();
-        var autoReadEnabled = profile?.Detection.AutoReadEnabled ?? true;
-        var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
-
-        // Get highest priority detection only (list is already sorted by priority)
+        // Get detection outside try block so it's in scope for error handling
         var detection = e.Detections[0];
-        System.Diagnostics.Debug.WriteLine($"Primary object changed: {detection.Label} (AutoRead: {autoReadEnabled})");
-
-        // Get current frame for OCR
-        CapturedFrame? frame;
-        lock (_frameLock)
-        {
-            frame = _latestFrame;
-        }
-
-        if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
-        {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                LastReadText = detection.Label;
-            });
-            return;
-        }
 
         try
         {
+            // Check settings
+            var profile = GetSelectedGameProfile();
+            var autoReadEnabled = profile?.Detection.AutoReadEnabled ?? true;
+            var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
+
+            Logger.Log($"Primary object changed: {detection.Label} (AutoRead: {autoReadEnabled})");
+
+            // Get current frame for OCR
+            CapturedFrame? frame;
+            lock (_frameLock)
+            {
+                frame = _latestFrame;
+            }
+
+            if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    LastReadText = detection.Label;
+                });
+                return;
+            }
+
             // Extract text from the highest priority detection region
             var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
             var textResults = await _ocrService.ExtractTextFromRegionsAsync(
@@ -627,7 +769,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 speechText = readLabelAloud ? detection.Label : "";
             }
 
-            System.Diagnostics.Debug.WriteLine($"OCR result: {displayText}");
+            Logger.Log($"OCR result: {displayText}");
 
             // Speak the extracted text (only if auto-read is enabled and we have something to say)
             if (autoReadEnabled && _ttsService != null && _ttsService.IsReady && !string.IsNullOrEmpty(speechText))
@@ -635,7 +777,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 // Start tracking the label being read so we can cancel if user moves away
                 _detectionManager?.StartTrackingLabel(detection.Label, detection);
 
-                await _ttsService.SpeakAsync(speechText, interrupt: true);
+                await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
 
                 // Stop tracking after speech completes (if not already stopped due to disappearance)
                 _detectionManager?.StopTrackingLabel(detection.Label);
@@ -648,7 +790,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"OCR error: {ex.Message}");
+            Logger.Error("OnPrimaryObjectChanged error", ex);
 
             // Stop tracking on error
             _detectionManager?.StopTrackingAllLabels();
@@ -760,4 +902,14 @@ public class GameProfileItem
     public string DisplayName { get; set; } = string.Empty;
 
     public override string ToString() => DisplayName;
+}
+
+/// <summary>
+/// Specifies which tier of detection is being read aloud.
+/// </summary>
+public enum SpeechTier
+{
+    Primary,
+    Secondary,
+    Tertiary
 }

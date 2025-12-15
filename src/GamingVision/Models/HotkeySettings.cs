@@ -16,14 +16,19 @@ public class HotkeySettings
     public string ReadSecondary { get; set; } = "Alt+2";
 
     /// <summary>
-    /// Hotkey to stop current speech and clear queue (e.g., "Alt+3").
+    /// Hotkey to read tertiary object (e.g., "Alt+3").
     /// </summary>
-    public string StopReading { get; set; } = "Alt+3";
+    public string ReadTertiary { get; set; } = "Alt+3";
 
     /// <summary>
-    /// Hotkey to pause/resume detection (e.g., "Alt+4").
+    /// Hotkey to stop current speech and clear queue (e.g., "Alt+4").
     /// </summary>
-    public string ToggleDetection { get; set; } = "Alt+4";
+    public string StopReading { get; set; } = "Alt+4";
+
+    /// <summary>
+    /// Hotkey to pause/resume detection (e.g., "Alt+5").
+    /// </summary>
+    public string ToggleDetection { get; set; } = "Alt+5";
 
     /// <summary>
     /// Hotkey to exit the application (e.g., "Alt+Q").
@@ -37,6 +42,7 @@ public class HotkeySettings
     {
         ReadPrimary = ReadPrimary,
         ReadSecondary = ReadSecondary,
+        ReadTertiary = ReadTertiary,
         StopReading = StopReading,
         ToggleDetection = ToggleDetection,
         Quit = Quit

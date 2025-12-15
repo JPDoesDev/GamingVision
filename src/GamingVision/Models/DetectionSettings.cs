@@ -59,6 +59,11 @@ public class DetectionSettings
     public bool ReadSecondaryLabelAloud { get; set; } = false;
 
     /// <summary>
+    /// Speak the label name aloud when reading tertiary objects.
+    /// </summary>
+    public bool ReadTertiaryLabelAloud { get; set; } = false;
+
+    /// <summary>
     /// Creates a deep copy of this instance.
     /// </summary>
     public DetectionSettings Clone() => new()
@@ -72,6 +77,7 @@ public class DetectionSettings
         AutoReadEnabled = AutoReadEnabled,
         OnlyReadChanges = OnlyReadChanges,
         ReadPrimaryLabelAloud = ReadPrimaryLabelAloud,
-        ReadSecondaryLabelAloud = ReadSecondaryLabelAloud
+        ReadSecondaryLabelAloud = ReadSecondaryLabelAloud,
+        ReadTertiaryLabelAloud = ReadTertiaryLabelAloud
     };
 }

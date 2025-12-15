@@ -1,0 +1,43 @@
+<Window x:Class="GamingVision.Views.AvailableLabelsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Available Labels"
+        Height="400"
+        Width="350"
+        MinHeight="300"
+        MinWidth="300"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Available Labels Dialog">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,15">
+            These labels are available for use in Primary, Secondary, and Tertiary label fields.
+            They are defined in the labelPriority list in game_config.json.
+        </TextBlock>
+
+        <ListBox Grid.Row="1" x:Name="LabelsListBox"
+                 AutomationProperties.Name="Available Labels List"
+                 SelectionMode="Single">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="14" Padding="5,3"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Button Grid.Row="2" Content="Close"
+                Click="CloseButton_Click"
+                HorizontalAlignment="Right"
+                Margin="0,15,0,0"
+                MinWidth="80"
+                AutomationProperties.Name="Close Dialog"/>
+    </Grid>
+</Window>

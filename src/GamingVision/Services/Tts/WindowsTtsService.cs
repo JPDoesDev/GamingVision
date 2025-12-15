@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Speech.Synthesis;
+using GamingVision.Utilities;
 
 namespace GamingVision.Services.Tts;
 
@@ -74,10 +75,16 @@ public class WindowsTtsService : ITtsService
     public async Task SpeakAsync(string text, bool interrupt = false)
     {
         if (_synthesizer == null || string.IsNullOrWhiteSpace(text))
+        {
+            Logger.Warn($"SpeakAsync: Skipped - synthesizer null or empty text");
             return;
+        }
+
+        Logger.Log($"SpeakAsync: Speaking '{text.Substring(0, Math.Min(50, text.Length))}' (interrupt: {interrupt})");
 
         if (interrupt)
         {
+            Logger.Log("SpeakAsync: Interrupting current speech");
             Stop();
         }
 
@@ -87,11 +94,13 @@ public class WindowsTtsService : ITtsService
             {
                 try
                 {
+                    Logger.Log("SpeakAsync: Calling synthesizer.SpeakAsync");
                     _synthesizer.SpeakAsync(text);
+                    Logger.Log("SpeakAsync: SpeakAsync call completed");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"TTS speak error: {ex.Message}");
+                    Logger.Error("TTS speak error", ex);
                 }
             }
         });
@@ -121,11 +130,13 @@ public class WindowsTtsService : ITtsService
         {
             try
             {
+                Logger.Log("TTS Stop: Cancelling all speech");
                 _synthesizer.SpeakAsyncCancelAll();
+                Logger.Log("TTS Stop: Cancelled");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"TTS stop error: {ex.Message}");
+                Logger.Error("TTS stop error", ex);
             }
         }
     }
@@ -170,10 +181,15 @@ public class WindowsTtsService : ITtsService
     public bool SetVoice(string voiceName)
     {
         if (_synthesizer == null || string.IsNullOrWhiteSpace(voiceName))
+        {
+            Logger.Warn($"SetVoice: Skipped - synthesizer null or empty voice name");
             return false;
+        }
 
         try
         {
+            Logger.Log($"SetVoice: Setting voice to '{voiceName}'");
+
             // Try exact match first
             var voice = _availableVoices.FirstOrDefault(v =>
                 v.Name.Equals(voiceName, StringComparison.OrdinalIgnoreCase));
@@ -187,18 +203,19 @@ public class WindowsTtsService : ITtsService
 
             if (voice != null)
             {
+                Logger.Log($"SetVoice: Calling SelectVoice({voice.Name})");
                 _synthesizer.SelectVoice(voice.Name);
                 CurrentVoice = voice;
-                Debug.WriteLine($"TTS voice set to: {voice.Name}");
+                Logger.Log($"SetVoice: Voice set to: {voice.Name}");
                 return true;
             }
 
-            Debug.WriteLine($"TTS voice not found: {voiceName}");
+            Logger.Warn($"SetVoice: Voice not found: {voiceName}");
             return false;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"TTS set voice error: {ex.Message}");
+            Logger.Error("SetVoice error", ex);
             return false;
         }
     }

@@ -9,7 +9,9 @@
   ],
   "secondaryLabels": [
     "info",
-    "quest",
+    "quest"
+  ],
+  "tertiaryLabels": [
     "controls",
     "menu_labeld"
   ],
@@ -26,8 +28,9 @@
   "hotkeys": {
     "readPrimary": "Alt\u002B1",
     "readSecondary": "Alt\u002B2",
-    "stopReading": "Alt\u002B3",
-    "toggleDetection": "Alt\u002B4",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
     "quit": "Alt\u002BQ"
   },
   "capture": {
@@ -43,6 +46,8 @@
     "primaryRate": 3,
     "secondaryVoice": "Microsoft Zira Desktop",
     "secondaryRate": 0,
+    "tertiaryVoice": "Microsoft Zira Desktop",
+    "tertiaryRate": 0,
     "volume": 100
   },
   "detection": {
@@ -55,6 +60,7 @@
     "autoReadEnabled": false,
     "onlyReadChanges": true,
     "readPrimaryLabelAloud": true,
-    "readSecondaryLabelAloud": false
+    "readSecondaryLabelAloud": false,
+    "readTertiaryLabelAloud": false
   }
 }

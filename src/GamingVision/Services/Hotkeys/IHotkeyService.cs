@@ -58,9 +58,10 @@ public enum HotkeyId
 {
     ReadPrimary = 1,
     ReadSecondary = 2,
-    StopReading = 3,
-    ToggleDetection = 4,
-    Quit = 5
+    ReadTertiary = 3,
+    StopReading = 4,
+    ToggleDetection = 5,
+    Quit = 6
 }
 
 /// <summary>

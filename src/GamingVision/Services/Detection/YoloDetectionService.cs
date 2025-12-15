@@ -4,6 +4,7 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using GamingVision.Models;
 using GamingVision.Services.ScreenCapture;
+using GamingVision.Utilities;
 
 namespace GamingVision.Services.Detection;
 
@@ -20,6 +21,8 @@ public class YoloDetectionService : IDetectionService
     private string _inputName = "images";
     private string _outputName = "output0";
     private bool _disposed;
+    private readonly object _inferenceLock = new();
+    private bool _isInferenceRunning;
 
     public bool IsReady => _session != null;
     public IReadOnlyList<string> Labels => _labels;
@@ -149,40 +152,78 @@ public class YoloDetectionService : IDetectionService
     public async Task<List<DetectedObject>> DetectAsync(CapturedFrame frame, float confidenceThreshold = 0.5f)
     {
         if (_session == null || frame.IsDisposed)
-            return [];
-
-        return await Task.Run(() =>
         {
-            try
+            Logger.Warn("DetectAsync: Session null or frame disposed");
+            return [];
+        }
+
+        // Skip if inference is already running (prevents concurrent ONNX calls which can crash)
+        lock (_inferenceLock)
+        {
+            if (_isInferenceRunning)
             {
-                // Preprocess: Convert BGRA to RGB and resize to model input size
-                var inputTensor = PreprocessFrame(frame);
-
-                // Run inference
-                var inputs = new List<NamedOnnxValue>
-                {
-                    NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
-                };
-
-                using var results = _session.Run(inputs);
-                var outputTensor = results.First().AsTensor<float>();
-
-                // Post-process: Extract detections from YOLO output
-                var detections = PostProcessYoloOutput(
-                    outputTensor,
-                    frame.Width,
-                    frame.Height,
-                    confidenceThreshold);
-
-                // Apply NMS
-                return ApplyNms(detections, 0.45f);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Detection error: {ex.Message}");
+                Logger.LogDebug("DetectAsync: Skipping - inference already running");
                 return [];
             }
-        });
+            _isInferenceRunning = true;
+        }
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    Logger.LogDebug($"DetectAsync: Starting inference on {frame.Width}x{frame.Height} frame");
+
+                    // Check again if frame is still valid
+                    if (frame.IsDisposed)
+                    {
+                        Logger.Warn("DetectAsync: Frame disposed before inference");
+                        return [];
+                    }
+
+                    // Preprocess: Convert BGRA to RGB and resize to model input size
+                    Logger.LogDebug("DetectAsync: Preprocessing frame");
+                    var inputTensor = PreprocessFrame(frame);
+
+                    // Run inference
+                    Logger.LogDebug("DetectAsync: Running ONNX inference");
+                    var inputs = new List<NamedOnnxValue>
+                    {
+                        NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
+                    };
+
+                    using var results = _session!.Run(inputs);
+                    Logger.LogDebug("DetectAsync: Inference complete, processing output");
+                    var outputTensor = results.First().AsTensor<float>();
+
+                    // Post-process: Extract detections from YOLO output
+                    var detections = PostProcessYoloOutput(
+                        outputTensor,
+                        frame.Width,
+                        frame.Height,
+                        confidenceThreshold);
+
+                    // Apply NMS
+                    var finalDetections = ApplyNms(detections, 0.45f);
+                    Logger.LogDebug($"DetectAsync: Found {finalDetections.Count} detections");
+                    return finalDetections;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("DetectAsync error", ex);
+                    return [];
+                }
+            });
+        }
+        finally
+        {
+            lock (_inferenceLock)
+            {
+                _isInferenceRunning = false;
+            }
+        }
     }
 
     /// <summary>

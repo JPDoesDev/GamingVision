@@ -5,9 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Application Settings"
-        Height="300"
+        Height="350"
         Width="550"
-        MinHeight="250"
+        MinHeight="300"
         MinWidth="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
@@ -16,6 +16,7 @@
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -34,8 +35,22 @@
             </StackPanel>
         </GroupBox>
 
+        <!-- Debugging Settings -->
+        <GroupBox Grid.Row="1" Header="Debugging">
+            <StackPanel>
+                <CheckBox Content="Enable Logging"
+                          IsChecked="{Binding EnableLogging}"
+                          AutomationProperties.Name="Enable Logging"
+                          AutomationProperties.HelpText="Log application events to file for troubleshooting"/>
+                <TextBlock Text="Log file: logs/gamingvision.log"
+                           Margin="30,5,0,5"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           AutomationProperties.Name="Log file location"/>
+            </StackPanel>
+        </GroupBox>
+
         <!-- Buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
             <Button Content="Save"
                     Click="SaveButton_Click"
                     AutomationProperties.Name="Save Settings"/>

@@ -17,6 +17,9 @@ public partial class AppSettingsViewModel : ObservableObject
     private bool _useDirectML;
 
     [ObservableProperty]
+    private bool _enableLogging;
+
+    [ObservableProperty]
     private string _gpuName = "Detecting...";
 
     public AppSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
@@ -31,6 +34,7 @@ public partial class AppSettingsViewModel : ObservableObject
     private void LoadSettings()
     {
         UseDirectML = _appConfig.UseDirectML;
+        EnableLogging = _appConfig.EnableLogging;
     }
 
     private void DetectGpu()
@@ -50,6 +54,10 @@ public partial class AppSettingsViewModel : ObservableObject
     private void SaveSettings()
     {
         _appConfig.UseDirectML = UseDirectML;
+        _appConfig.EnableLogging = EnableLogging;
+
+        // Update logger state immediately
+        Logger.SetEnabled(EnableLogging);
     }
 
     [RelayCommand]

@@ -31,6 +31,16 @@ public class TtsSettings
     public int SecondaryRate { get; set; } = 0;
 
     /// <summary>
+    /// Voice name for tertiary objects.
+    /// </summary>
+    public string TertiaryVoice { get; set; } = "Microsoft David";
+
+    /// <summary>
+    /// Speech rate for tertiary objects (-10 to 10 for SAPI).
+    /// </summary>
+    public int TertiaryRate { get; set; } = 0;
+
+    /// <summary>
     /// Volume level (0-100).
     /// </summary>
     public int Volume { get; set; } = 100;
@@ -45,6 +55,8 @@ public class TtsSettings
         PrimaryRate = PrimaryRate,
         SecondaryVoice = SecondaryVoice,
         SecondaryRate = SecondaryRate,
+        TertiaryVoice = TertiaryVoice,
+        TertiaryRate = TertiaryRate,
         Volume = Volume
     };
 }

@@ -70,11 +70,18 @@ public class ScreenCaptureManager : IDisposable
     /// </summary>
     public async Task<bool> StartAsync()
     {
+        Logger.Log("ScreenCaptureManager: StartAsync called");
         if (_captureService == null)
+        {
+            Logger.Warn("ScreenCaptureManager: StartAsync - capture service is null");
             return false;
+        }
 
         _captureService.FrameCaptured += OnFrameCaptured;
-        return await _captureService.StartCaptureAsync();
+        Logger.Log("ScreenCaptureManager: Starting capture");
+        var result = await _captureService.StartCaptureAsync();
+        Logger.Log($"ScreenCaptureManager: StartCaptureAsync returned {result}");
+        return result;
     }
 
     /// <summary>
@@ -82,10 +89,12 @@ public class ScreenCaptureManager : IDisposable
     /// </summary>
     public void Stop()
     {
+        Logger.Log("ScreenCaptureManager: Stop called");
         if (_captureService != null)
         {
             _captureService.FrameCaptured -= OnFrameCaptured;
             _captureService.StopCapture();
+            Logger.Log("ScreenCaptureManager: Capture stopped");
         }
     }
 

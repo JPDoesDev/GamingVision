@@ -38,6 +38,11 @@ public class GameProfile
     public List<string> SecondaryLabels { get; set; } = [];
 
     /// <summary>
+    /// Third category of object types read on hotkey only.
+    /// </summary>
+    public List<string> TertiaryLabels { get; set; } = [];
+
+    /// <summary>
     /// Order to process when multiple objects detected.
     /// </summary>
     public List<string> LabelPriority { get; set; } = [];
@@ -73,6 +78,7 @@ public class GameProfile
         WindowTitle = WindowTitle,
         PrimaryLabels = [.. PrimaryLabels],
         SecondaryLabels = [.. SecondaryLabels],
+        TertiaryLabels = [.. TertiaryLabels],
         LabelPriority = [.. LabelPriority],
         Hotkeys = Hotkeys.Clone(),
         Capture = Capture.Clone(),
