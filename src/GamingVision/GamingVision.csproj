@@ -67,7 +67,6 @@
     <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\ARM64" Condition="Exists('$(MSBuildProjectDirectory)\bin\ARM64')" />
     <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Win32" Condition="Exists('$(MSBuildProjectDirectory)\bin\Win32')" />
     <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Gaming.Xbox.Scarlett.x64" Condition="Exists('$(MSBuildProjectDirectory)\bin\Gaming.Xbox.Scarlett.x64')" />
-    <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\Release" Condition="Exists('$(MSBuildProjectDirectory)\bin\Release')" />
   </Target>
 
 </Project>

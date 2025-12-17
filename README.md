@@ -68,26 +68,40 @@ All hotkeys are configurable per game in Game Settings.
 
 ```
 GamingVision/
-├── src/GamingVision/
-│   ├── Models/              # Data models (GameProfile, Settings, etc.)
-│   ├── ViewModels/          # MVVM ViewModels
-│   ├── Views/               # WPF Windows and dialogs
-│   ├── Services/
-│   │   ├── Detection/       # YOLO detection service + DetectionManager
-│   │   ├── Ocr/             # Windows OCR service
-│   │   ├── Tts/             # Text-to-speech service
-│   │   ├── Hotkeys/         # Global hotkey service
-│   │   └── ScreenCapture/   # Windows Graphics Capture
-│   ├── Utilities/           # ConfigManager, Logger, GPU detection
-│   └── Native/              # Win32 P/Invoke declarations
-├── GameModels/              # Per-game model folders
+├── src/
+│   ├── GamingVision/                    # Main WPF application
+│   │   ├── Models/                      # Data models (GameProfile, Settings, etc.)
+│   │   ├── ViewModels/                  # MVVM ViewModels
+│   │   ├── Views/                       # WPF Windows and dialogs
+│   │   ├── Services/
+│   │   │   ├── Detection/               # YOLO detection service + DetectionManager
+│   │   │   ├── Ocr/                     # Windows OCR service
+│   │   │   ├── Tts/                     # Text-to-speech service
+│   │   │   ├── Hotkeys/                 # Global hotkey service
+│   │   │   └── ScreenCapture/           # Windows Graphics Capture
+│   │   ├── Utilities/                   # ConfigManager, Logger, GPU detection
+│   │   └── Native/                      # Win32 P/Invoke declarations
+│   │
+│   └── GamingVision.TrainingTool/       # Training data collection console app
+│       ├── Program.cs                   # TUI menu and capture logic
+│       ├── TrainingDataManager.cs       # YOLO annotation file management
+│       └── ConsoleHotkeyService.cs      # F1 hotkey handling
+│
+├── GameModels/                          # Per-game model folders
 │   └── no_mans_sky/
-│       ├── NoMansModel.onnx # YOLO model
-│       ├── NoMansModel.txt  # Label definitions
-│       └── game_config.json # Game-specific configuration
-├── app_settings.json        # Application-wide settings
-├── export_model.py          # Script to convert .pt to .onnx
-└── DESIGN_DOCUMENT.md       # Technical design specification
+│       ├── NoMansModel.onnx             # YOLO model
+│       ├── NoMansModel.txt              # Label definitions
+│       └── game_config.json             # Game-specific configuration
+│
+├── training_data/                       # Training data output (created by TrainingTool)
+│   └── {game_id}/
+│       ├── images/                      # Screenshots (PNG)
+│       ├── labels/                      # YOLO annotations (TXT)
+│       └── classes.txt                  # Label names for LabelImg
+│
+├── app_settings.json                    # Application-wide settings
+├── export_model.py                      # Script to convert .pt to .onnx
+└── DESIGN_DOCUMENT.md                   # Technical design specification
 ```
 
 ## Configuration
@@ -163,10 +177,49 @@ Each game has its own configuration file:
 - **autoReadEnabled**: Whether primary objects are automatically read when detected
 - **readPrimaryLabelAloud**: Include the label name when speaking (e.g., "item, Health Pack")
 
+## Training Data Collection Tool
+
+GamingVision includes a console-based training data collection tool for creating and improving YOLO models.
+
+### Running the Training Tool
+
+```powershell
+dotnet run --project src\GamingVision.TrainingTool
+```
+
+### Features
+
+- **TUI Menu**: Select existing game profile or create a new one
+- **F1 Hotkey**: Captures fullscreen screenshot while gaming
+- **Auto-Detection**: If a model exists, runs YOLO and pre-labels the screenshot
+- **LabelImg Compatible**: Outputs YOLO format annotations
+
+### Workflow
+
+1. Run the training tool and select a game (or create new profile)
+2. Launch your game
+3. Press **F1** whenever there's an interesting UI element on screen
+4. Screenshots are saved to `training_data/{game}/images/`
+5. If model exists, annotations are saved to `training_data/{game}/labels/`
+6. Press **Escape** to return to menu
+7. Use [LabelImg](https://github.com/HumanSignal/labelImg) to review/adjust annotations
+8. Train your model with the collected data
+
+### Output Format
+
+```
+training_data/{game_id}/
+  images/screenshot_0001.png
+  labels/screenshot_0001.txt   # Only if detections found
+  classes.txt                  # Label names for LabelImg
+```
+
+Annotation format (YOLO): `class_id center_x center_y width height` (normalized 0-1)
+
 ## Creating Custom Models
 
-1. Collect screenshots from your target game
-2. Label UI elements using a tool like [Label Studio](https://labelstud.io/) or [CVAT](https://cvat.ai/)
+1. Use the Training Tool to collect screenshots from your target game
+2. Label UI elements using [LabelImg](https://github.com/HumanSignal/labelImg) (annotations in `training_data/{game}/labels/`)
 3. Train a YOLOv8 model:
    ```python
    from ultralytics import YOLO
@@ -178,8 +231,7 @@ Each game has its own configuration file:
    model.export(format='onnx', imgsz=640, simplify=True)
    ```
 5. Create a labels file (`modelname.txt`) with one class per line
-6. Create a `game_config.json` with your settings
-7. Place all files in `GameModels/{your_game}/`
+6. Place model and labels in `GameModels/{your_game}/`
 
 ## Debugging
 

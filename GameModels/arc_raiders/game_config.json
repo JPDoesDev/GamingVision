@@ -1,0 +1,48 @@
+{
+  "gameId": "arc_raiders",
+  "displayName": "ARC Raiders",
+  "modelFile": "arc_raiders_model.onnx",
+  "windowTitle": "arc_raiders.exe",
+  "primaryLabels": [],
+  "secondaryLabels": [],
+  "tertiaryLabels": [],
+  "labelPriority": [],
+  "hotkeys": {
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
+    "quit": "Alt\u002BQ"
+  },
+  "capture": {
+    "method": "window",
+    "monitorIndex": 0,
+    "captureCursor": false,
+    "scaleFactor": 1,
+    "regionOfInterest": ""
+  },
+  "tts": {
+    "engine": "sapi",
+    "primaryVoice": "Microsoft David",
+    "primaryRate": 3,
+    "secondaryVoice": "Microsoft David",
+    "secondaryRate": 0,
+    "tertiaryVoice": "Microsoft David",
+    "tertiaryRate": 0,
+    "volume": 100
+  },
+  "detection": {
+    "autoReadCooldown": 2000,
+    "confidenceThreshold": 0.3,
+    "autoReadConfidenceThreshold": 0.6,
+    "nmsThreshold": 0.45,
+    "maxDetections": 100,
+    "targetFps": 10,
+    "autoReadEnabled": false,
+    "onlyReadChanges": true,
+    "readPrimaryLabelAloud": true,
+    "readSecondaryLabelAloud": false,
+    "readTertiaryLabelAloud": false
+  }
+}

@@ -132,7 +132,10 @@ public class GdiCaptureService : IScreenCaptureService
         }
     }
 
-    private CapturedFrame? CaptureFrame()
+    /// <summary>
+    /// Captures a single frame immediately.
+    /// </summary>
+    public CapturedFrame? CaptureFrame()
     {
         Rectangle bounds;
 
