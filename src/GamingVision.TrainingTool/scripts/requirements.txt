@@ -1,0 +1,16 @@
+# GamingVision Model Training Dependencies
+# Install with: py -3.9 -m pip install -r requirements.txt
+
+# YOLO training framework
+ultralytics>=8.0.0
+
+# Image labeling tool
+labelImg
+
+# Optional: GPU acceleration (uncomment if you have CUDA)
+# torch>=2.0.0
+# torchvision>=0.15.0
+
+# Utilities
+pyyaml>=6.0
+pillow>=9.0.0

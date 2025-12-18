@@ -13,7 +13,6 @@ public class TrainingDataManager
 {
     private readonly string _trainingDataRoot;
     private readonly string _gameId;
-    private int _screenshotCounter;
 
     public string GameId => _gameId;
     public string ImagesPath => Path.Combine(_trainingDataRoot, _gameId, "images");
@@ -24,7 +23,6 @@ public class TrainingDataManager
     {
         _trainingDataRoot = trainingDataRoot;
         _gameId = gameId;
-        _screenshotCounter = 0;
     }
 
     /// <summary>
@@ -37,48 +35,21 @@ public class TrainingDataManager
     }
 
     /// <summary>
-    /// Initializes the screenshot counter based on existing files.
+    /// Initializes the training data manager. Call after construction.
     /// </summary>
-    public void InitializeCounter()
+    public void Initialize()
     {
-        if (!Directory.Exists(ImagesPath))
-        {
-            _screenshotCounter = 0;
-            return;
-        }
-
-        var existingFiles = Directory.GetFiles(ImagesPath, "screenshot_*.jpg");
-        if (existingFiles.Length == 0)
-        {
-            _screenshotCounter = 0;
-            return;
-        }
-
-        // Find the highest numbered screenshot
-        int maxNumber = 0;
-        foreach (var file in existingFiles)
-        {
-            var filename = Path.GetFileNameWithoutExtension(file);
-            if (filename.StartsWith("screenshot_"))
-            {
-                var numberPart = filename.Substring("screenshot_".Length);
-                if (int.TryParse(numberPart, out int number))
-                {
-                    maxNumber = Math.Max(maxNumber, number);
-                }
-            }
-        }
-
-        _screenshotCounter = maxNumber;
+        EnsureDirectories();
     }
 
     /// <summary>
-    /// Gets the next sequential filename (without extension).
+    /// Gets a unique filename based on current date and time (without extension).
+    /// Format: screenshot_YYYYMMDD_HHmmss_fff
     /// </summary>
     public string GetNextFilename()
     {
-        _screenshotCounter++;
-        return $"screenshot_{_screenshotCounter:D4}";
+        var now = DateTime.Now;
+        return $"screenshot_{now:yyyyMMdd_HHmmss_fff}";
     }
 
     /// <summary>

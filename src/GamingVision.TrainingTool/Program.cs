@@ -258,8 +258,7 @@ class Program
         // Initialize training data manager
         var trainingDataManager = new TrainingDataManager(
             Path.GetFullPath(TrainingDataRoot), profile.GameId);
-        trainingDataManager.EnsureDirectories();
-        trainingDataManager.InitializeCounter();
+        trainingDataManager.Initialize();
 
         // Get current stats
         var (imageCount, labeledCount) = trainingDataManager.GetStatistics();
