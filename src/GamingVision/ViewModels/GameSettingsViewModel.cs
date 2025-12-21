@@ -140,10 +140,44 @@ public partial class GameSettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Gets the available labels from the current profile's LabelPriority list.
+    /// Gets the available labels from the model's label file (.txt file alongside .onnx).
     /// </summary>
     public List<string> GetAvailableLabels()
     {
+        if (_currentProfile == null || string.IsNullOrEmpty(_currentProfile.ModelFile))
+            return [];
+
+        try
+        {
+            // Get the model path and derive the labels file path
+            var modelPath = _configManager.GetModelPath(_currentProfile.GameId, _currentProfile.ModelFile);
+            var labelsPath = Path.ChangeExtension(modelPath, ".txt");
+
+            if (File.Exists(labelsPath))
+            {
+                return File.ReadAllLines(labelsPath)
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
+            }
+
+            // Fallback: try modelname_labels.txt
+            var dir = Path.GetDirectoryName(modelPath) ?? ".";
+            var name = Path.GetFileNameWithoutExtension(modelPath);
+            labelsPath = Path.Combine(dir, $"{name}_labels.txt");
+
+            if (File.Exists(labelsPath))
+            {
+                return File.ReadAllLines(labelsPath)
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error reading labels file: {ex.Message}");
+        }
+
+        // Final fallback: return LabelPriority from config
         return _currentProfile?.LabelPriority ?? [];
     }
 

@@ -184,19 +184,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task ReadPrimaryObjectsAsync()
     {
+        Logger.Log("ReadPrimaryObjectsAsync: Starting");
+
         if (_detectionManager == null || !IsDetectionRunning)
         {
+            Logger.Log("ReadPrimaryObjectsAsync: Detection not running, playing beep");
             System.Media.SystemSounds.Beep.Play();
             return;
         }
 
         if (_ttsService == null)
+        {
+            Logger.Warn("ReadPrimaryObjectsAsync: TTS service is null");
             return;
+        }
 
         var profile = GetSelectedGameProfile();
         var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
+        Logger.Log($"ReadPrimaryObjectsAsync: readLabelAloud = {readLabelAloud}");
 
         var primaryDetections = _detectionManager.GetCurrentPrimaryDetections();
+        Logger.Log($"ReadPrimaryObjectsAsync: Got {primaryDetections.Count} primary detections");
+
         if (primaryDetections.Count == 0)
         {
             await SpeakWithVoiceAsync("No primary objects detected", SpeechTier.Primary, interrupt: true);
@@ -205,6 +214,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Get highest priority detection (list is already sorted by priority)
         var detection = primaryDetections[0];
+        Logger.Log($"ReadPrimaryObjectsAsync: Highest priority detection = {detection.Label} ({detection.Confidence:F2})");
 
         // Get frame for OCR
         CapturedFrame? frame;
@@ -213,16 +223,38 @@ public partial class MainViewModel : ObservableObject, IDisposable
             frame = _latestFrame;
         }
 
-        if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
+        if (frame == null)
         {
+            Logger.Warn("ReadPrimaryObjectsAsync: Frame is null, speaking label only");
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
+            return;
+        }
+
+        if (frame.IsDisposed)
+        {
+            Logger.Warn("ReadPrimaryObjectsAsync: Frame is disposed, speaking label only");
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
+            return;
+        }
+
+        if (_ocrService == null || !_ocrService.IsReady)
+        {
+            Logger.Warn($"ReadPrimaryObjectsAsync: OCR not ready (null: {_ocrService == null}), speaking label only");
             await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
             return;
         }
 
         // Extract text from the highest priority detection region
+        Logger.Log($"ReadPrimaryObjectsAsync: Running OCR on region ({detection.X1},{detection.Y1})-({detection.X2},{detection.Y2})");
         var regions = new List<OcrRegion> { OcrRegion.FromDetection(detection) };
         var textResults = await _ocrService.ExtractTextFromRegionsAsync(
             frame.Data, frame.Width, frame.Height, frame.Stride, regions);
+
+        Logger.Log($"ReadPrimaryObjectsAsync: OCR returned {textResults.Count} results");
+        foreach (var kvp in textResults)
+        {
+            Logger.Log($"ReadPrimaryObjectsAsync: OCR result - '{kvp.Key}': '{kvp.Value}'");
+        }
 
         string displayText;
         string speechText;
@@ -231,22 +263,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             displayText = $"{detection.Label}: {text}";
             speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+            Logger.Log($"ReadPrimaryObjectsAsync: OCR found text, speechText = '{speechText}'");
+
+            Logger.Log($"ReadPrimaryObjectsAsync: Speaking '{speechText}'");
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LastReadText = displayText;
+            });
         }
         else
         {
-            displayText = detection.Label;
-            speechText = readLabelAloud ? detection.Label : "";
+            // OCR found no text - play beep to indicate detection found but no readable text
+            Logger.Log($"ReadPrimaryObjectsAsync: No OCR text for '{detection.Label}', playing beep");
+            System.Media.SystemSounds.Beep.Play();
         }
-
-        if (!string.IsNullOrEmpty(speechText))
-        {
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
-        }
-
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            LastReadText = displayText;
-        });
     }
 
     /// <summary>
@@ -301,22 +333,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             displayText = $"{detection.Label}: {text}";
             speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Secondary, interrupt: true);
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LastReadText = displayText;
+            });
         }
         else
         {
-            displayText = detection.Label;
-            speechText = readLabelAloud ? detection.Label : "";
+            // OCR found no text - play beep to indicate detection found but no readable text
+            System.Media.SystemSounds.Beep.Play();
         }
-
-        if (!string.IsNullOrEmpty(speechText))
-        {
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Secondary, interrupt: true);
-        }
-
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            LastReadText = displayText;
-        });
     }
 
     /// <summary>
@@ -371,22 +400,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             displayText = $"{detection.Label}: {text}";
             speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Tertiary, interrupt: true);
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                LastReadText = displayText;
+            });
         }
         else
         {
-            displayText = detection.Label;
-            speechText = readLabelAloud ? detection.Label : "";
+            // OCR found no text - play beep to indicate detection found but no readable text
+            System.Media.SystemSounds.Beep.Play();
         }
-
-        if (!string.IsNullOrEmpty(speechText))
-        {
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Tertiary, interrupt: true);
-        }
-
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            LastReadText = displayText;
-        });
     }
 
     /// <summary>
@@ -657,6 +683,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var frameWidth = e.Width;
             var frameHeight = e.Height;
 
+            // Log every 30 frames to avoid spam
+            if (_frameCount % 30 == 1)
+            {
+                Logger.Log($"OnFrameCaptured: Frame {_frameCount}, {frameWidth}x{frameHeight}, disposed={e.IsDisposed}");
+            }
+
             // Store latest frame for OCR processing
             lock (_frameLock)
             {
@@ -675,6 +707,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     Logger.Error("Detection error in frame processing", ex);
                 }
+            }
+            else if (_frameCount % 30 == 1)
+            {
+                Logger.Warn($"OnFrameCaptured: Detection not ready (manager null: {_detectionManager == null}, service ready: {_detectionManager?.DetectionService?.IsReady})");
             }
 
             // Update UI every 10 frames to avoid excessive updates
@@ -754,39 +790,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var textResults = await _ocrService.ExtractTextFromRegionsAsync(
                 frame.Data, frame.Width, frame.Height, frame.Stride, regions);
 
-            // Build text result
-            string displayText;
-            string speechText;
-
+            // Build text result - only speak if OCR found text
             if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
             {
-                displayText = $"{detection.Label}: {text}";
-                speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+                var displayText = $"{detection.Label}: {text}";
+                var speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
+
+                Logger.Log($"OCR result: {displayText}, speechText: '{speechText}'");
+
+                // Speak the extracted text (only if auto-read is enabled)
+                if (autoReadEnabled && _ttsService != null && _ttsService.IsReady)
+                {
+                    // Start tracking the label being read so we can cancel if user moves away
+                    _detectionManager?.StartTrackingLabel(detection.Label, detection);
+
+                    await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
+
+                    // Stop tracking after speech completes (if not already stopped due to disappearance)
+                    _detectionManager?.StopTrackingLabel(detection.Label);
+                }
+
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    LastReadText = displayText;
+                });
             }
             else
             {
-                displayText = detection.Label;
-                speechText = readLabelAloud ? detection.Label : "";
+                // OCR found no text - silently skip for auto-read (no beep for automatic reads)
+                Logger.Log($"Auto-read: No OCR text for '{detection.Label}', skipping");
             }
-
-            Logger.Log($"OCR result: {displayText}");
-
-            // Speak the extracted text (only if auto-read is enabled and we have something to say)
-            if (autoReadEnabled && _ttsService != null && _ttsService.IsReady && !string.IsNullOrEmpty(speechText))
-            {
-                // Start tracking the label being read so we can cancel if user moves away
-                _detectionManager?.StartTrackingLabel(detection.Label, detection);
-
-                await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
-
-                // Stop tracking after speech completes (if not already stopped due to disappearance)
-                _detectionManager?.StopTrackingLabel(detection.Label);
-            }
-
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                LastReadText = displayText;
-            });
         }
         catch (Exception ex)
         {

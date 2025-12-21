@@ -10,7 +10,7 @@ namespace GamingVision.Services.Detection;
 
 /// <summary>
 /// YOLO object detection service using ONNX Runtime.
-/// Supports YOLOv8 models exported to ONNX format.
+/// Supports YOLOv11 models exported to ONNX format.
 /// </summary>
 public class YoloDetectionService : IDetectionService
 {
@@ -151,7 +151,9 @@ public class YoloDetectionService : IDetectionService
     /// </summary>
     public async Task<List<DetectedObject>> DetectAsync(CapturedFrame frame, float confidenceThreshold = 0.5f)
     {
-        if (_session == null || frame.IsDisposed)
+        // Capture session reference early to prevent null access if disposed during async operation
+        var session = _session;
+        if (session == null || frame.IsDisposed)
         {
             Logger.Warn("DetectAsync: Session null or frame disposed");
             return [];
@@ -162,52 +164,57 @@ public class YoloDetectionService : IDetectionService
         {
             if (_isInferenceRunning)
             {
-                Logger.LogDebug("DetectAsync: Skipping - inference already running");
-                return [];
+                // Return null to indicate "skipped" vs empty list for "no detections found"
+                return null!;
             }
             _isInferenceRunning = true;
         }
 
         try
         {
+            // Clone frame data immediately to prevent issues if original frame is disposed
+            // during async processing (capture loop disposes previous frames every 100ms)
+            var frameData = new byte[frame.Data.Length];
+            Buffer.BlockCopy(frame.Data, 0, frameData, 0, frame.Data.Length);
+            var frameWidth = frame.Width;
+            var frameHeight = frame.Height;
+            var frameStride = frame.Stride;
+
             return await Task.Run(() =>
             {
                 try
                 {
-                    Logger.LogDebug($"DetectAsync: Starting inference on {frame.Width}x{frame.Height} frame");
-
-                    // Check again if frame is still valid
-                    if (frame.IsDisposed)
-                    {
-                        Logger.Warn("DetectAsync: Frame disposed before inference");
-                        return [];
-                    }
+                    Logger.Log($"DetectAsync: Starting inference on {frameWidth}x{frameHeight} frame");
 
                     // Preprocess: Convert BGRA to RGB and resize to model input size
-                    Logger.LogDebug("DetectAsync: Preprocessing frame");
-                    var inputTensor = PreprocessFrame(frame);
+                    var inputTensor = PreprocessFrameData(frameData, frameWidth, frameHeight, frameStride);
 
                     // Run inference
-                    Logger.LogDebug("DetectAsync: Running ONNX inference");
+                    Logger.Log("DetectAsync: Running ONNX inference");
                     var inputs = new List<NamedOnnxValue>
                     {
                         NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
                     };
 
-                    using var results = _session!.Run(inputs);
-                    Logger.LogDebug("DetectAsync: Inference complete, processing output");
+                    using var results = session.Run(inputs);
+                    Logger.Log("DetectAsync: Inference complete, processing output");
                     var outputTensor = results.First().AsTensor<float>();
 
                     // Post-process: Extract detections from YOLO output
                     var detections = PostProcessYoloOutput(
                         outputTensor,
-                        frame.Width,
-                        frame.Height,
+                        frameWidth,
+                        frameHeight,
                         confidenceThreshold);
 
                     // Apply NMS
                     var finalDetections = ApplyNms(detections, 0.45f);
-                    Logger.LogDebug($"DetectAsync: Found {finalDetections.Count} detections");
+                    Logger.Log($"DetectAsync: Found {finalDetections.Count} detections");
+                    if (finalDetections.Count > 0)
+                    {
+                        var labels = string.Join(", ", finalDetections.Select(d => $"{d.Label}({d.Confidence:F2})"));
+                        Logger.Log($"DetectAsync: Detections = [{labels}]");
+                    }
                     return finalDetections;
                 }
                 catch (Exception ex)
@@ -227,16 +234,16 @@ public class YoloDetectionService : IDetectionService
     }
 
     /// <summary>
-    /// Preprocesses a captured frame for YOLO inference.
+    /// Preprocesses raw frame data for YOLO inference.
     /// Converts BGRA to RGB, resizes, and normalizes to [0, 1].
     /// </summary>
-    private DenseTensor<float> PreprocessFrame(CapturedFrame frame)
+    private DenseTensor<float> PreprocessFrameData(byte[] data, int width, int height, int stride)
     {
         var tensor = new DenseTensor<float>(new[] { 1, 3, _inputHeight, _inputWidth });
 
         // Calculate scaling factors
-        float scaleX = (float)frame.Width / _inputWidth;
-        float scaleY = (float)frame.Height / _inputHeight;
+        float scaleX = (float)width / _inputWidth;
+        float scaleY = (float)height / _inputHeight;
 
         // Process each pixel in the target tensor
         for (int y = 0; y < _inputHeight; y++)
@@ -244,16 +251,20 @@ public class YoloDetectionService : IDetectionService
             for (int x = 0; x < _inputWidth; x++)
             {
                 // Map to source coordinates
-                int srcX = Math.Min((int)(x * scaleX), frame.Width - 1);
-                int srcY = Math.Min((int)(y * scaleY), frame.Height - 1);
+                int srcX = Math.Min((int)(x * scaleX), width - 1);
+                int srcY = Math.Min((int)(y * scaleY), height - 1);
 
                 // Calculate source pixel offset (BGRA format)
-                int srcOffset = srcY * frame.Stride + srcX * 4;
+                int srcOffset = srcY * stride + srcX * 4;
+
+                // Bounds check to prevent array index out of range
+                if (srcOffset + 2 >= data.Length)
+                    continue;
 
                 // Extract BGR values and convert to RGB, normalize to [0, 1]
-                byte b = frame.Data[srcOffset];
-                byte g = frame.Data[srcOffset + 1];
-                byte r = frame.Data[srcOffset + 2];
+                byte b = data[srcOffset];
+                byte g = data[srcOffset + 1];
+                byte r = data[srcOffset + 2];
 
                 // NCHW format: [batch, channel, height, width]
                 tensor[0, 0, y, x] = r / 255f; // R channel
@@ -266,8 +277,8 @@ public class YoloDetectionService : IDetectionService
     }
 
     /// <summary>
-    /// Post-processes YOLOv8 output tensor to extract detections.
-    /// YOLOv8 output format: [1, num_classes + 4, num_boxes] where boxes are [x_center, y_center, width, height]
+    /// Post-processes YOLO output tensor to extract detections.
+    /// YOLO output format: [1, num_classes + 4, num_boxes] where boxes are [x_center, y_center, width, height]
     /// </summary>
     private List<DetectedObject> PostProcessYoloOutput(
         Tensor<float> output,
@@ -278,7 +289,7 @@ public class YoloDetectionService : IDetectionService
         var detections = new List<DetectedObject>();
         var dims = output.Dimensions.ToArray();
 
-        // YOLOv8 format: [1, 4 + num_classes, num_boxes]
+        // YOLO format: [1, 4 + num_classes, num_boxes]
         // Need to transpose to [1, num_boxes, 4 + num_classes]
         int numFeatures = dims[1]; // 4 + num_classes
         int numBoxes = dims[2];

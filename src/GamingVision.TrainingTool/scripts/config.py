@@ -17,8 +17,8 @@ GAME_ID = "arc_raiders"
 MODEL_NAME = "ArcRaidersModel"
 
 # Base YOLO model to use for training
-# Options: "yolov8n.pt" (nano/fast), "yolov8s.pt" (small), "yolov8m.pt" (medium)
-BASE_MODEL = "yolov8n.pt"
+# Options: "yolo11n.pt" (nano/fast), "yolo11s.pt" (small), "yolo11m.pt" (medium)
+BASE_MODEL = "yolo11n.pt"
 
 # =============================================================================
 # PATHS - Auto-calculated, typically don't need to change

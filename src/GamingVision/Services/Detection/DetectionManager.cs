@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using GamingVision.Models;
 using GamingVision.Services.ScreenCapture;
+using GamingVision.Utilities;
 
 namespace GamingVision.Services.Detection;
 
@@ -89,14 +90,26 @@ public class DetectionManager : IDisposable
     public async Task<List<DetectedObject>> ProcessFrameAsync(CapturedFrame frame)
     {
         if (!_detectionService.IsReady || _currentProfile == null)
+        {
+            Logger.Warn($"ProcessFrameAsync: Early exit - service ready: {_detectionService.IsReady}, profile null: {_currentProfile == null}");
             return [];
+        }
 
         // Use the lower manual read threshold for detection to capture all potential objects
         // Auto-read will filter more strictly, manual reads will use these results
         var threshold = _currentProfile.Detection.ConfidenceThreshold;
         var detections = await _detectionService.DetectAsync(frame, threshold);
 
-        // Store and process detections
+        // DetectAsync returns null when inference was skipped (already running)
+        // Only update stored detections when inference actually ran
+        if (detections == null)
+        {
+            // Inference was skipped, don't overwrite previous detections
+            return [];
+        }
+
+        // Store and process detections (inference actually ran)
+        Logger.Log($"ProcessFrameAsync: DetectAsync returned {detections.Count} detections, calling ProcessDetections");
         ProcessDetections(detections);
 
         return detections;
@@ -107,8 +120,13 @@ public class DetectionManager : IDisposable
     /// </summary>
     private void ProcessDetections(List<DetectedObject> detections)
     {
-        if (_currentProfile == null) return;
+        if (_currentProfile == null)
+        {
+            Logger.Warn("ProcessDetections: _currentProfile is null, returning");
+            return;
+        }
 
+        Logger.Log($"ProcessDetections: Storing {detections.Count} detections in _lastDetections");
         lock (_detectionLock)
         {
             // Check if any tracked labels have disappeared (for TTS cancellation)
@@ -177,6 +195,7 @@ public class DetectionManager : IDisposable
             }
 
             _lastDetections = detections;
+            Logger.LogDebug($"ProcessDetections: Stored {detections.Count} detections in _lastDetections");
         }
     }
 
@@ -221,13 +240,26 @@ public class DetectionManager : IDisposable
     /// </summary>
     public List<DetectedObject> GetCurrentPrimaryDetections()
     {
-        if (_currentProfile == null) return [];
+        if (_currentProfile == null)
+        {
+            Logger.Warn("GetCurrentPrimaryDetections: No current profile");
+            return [];
+        }
 
         lock (_detectionLock)
         {
-            return SortByPriority(
-                _lastDetections.Where(d => _currentProfile.PrimaryLabels.Contains(d.Label)).ToList(),
-                _currentProfile.LabelPriority);
+            Logger.Log($"GetCurrentPrimaryDetections: _lastDetections count = {_lastDetections.Count}");
+            if (_lastDetections.Count > 0)
+            {
+                var labels = string.Join(", ", _lastDetections.Select(d => $"{d.Label}({d.Confidence:F2})"));
+                Logger.Log($"GetCurrentPrimaryDetections: Detection labels = [{labels}]");
+            }
+            Logger.Log($"GetCurrentPrimaryDetections: PrimaryLabels = [{string.Join(", ", _currentProfile.PrimaryLabels)}]");
+
+            var filtered = _lastDetections.Where(d => _currentProfile.PrimaryLabels.Contains(d.Label)).ToList();
+            Logger.Log($"GetCurrentPrimaryDetections: After filtering = {filtered.Count} detections");
+
+            return SortByPriority(filtered, _currentProfile.LabelPriority);
         }
     }
 

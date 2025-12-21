@@ -4,7 +4,7 @@ An accessibility tool for visually impaired gamers that uses computer vision (YO
 
 ## Features
 
-- **Real-time Object Detection**: Uses YOLOv8 models via ONNX Runtime with DirectML GPU acceleration
+- **Real-time Object Detection**: Uses YOLOv11 models via ONNX Runtime with DirectML GPU acceleration
 - **Three-Tier Detection System**: Primary (auto-read), Secondary (on-demand), and Tertiary (on-demand) object categories
 - **Text-to-Speech**: Windows SAPI voices with configurable voice and speed per tier
 - **OCR Integration**: Windows.Media.Ocr for extracting text from detected regions
@@ -35,7 +35,7 @@ src\GamingVision\bin\Release\net8.0-windows10.0.22621.0\win-x64\GamingVision.exe
 
 ### 2. Export Your YOLO Model
 
-If you have a trained YOLOv8 `.pt` model, convert it to ONNX:
+If you have a trained YOLOv11 `.pt` model, convert it to ONNX:
 
 ```powershell
 py -3.10 export_model.py
@@ -112,7 +112,7 @@ Located in the application directory:
 
 ```json
 {
-  "version": "1.0",
+  "version": "0.1.0",
   "selectedGame": "no_mans_sky",
   "useDirectML": true,
   "autoStartDetection": false,
@@ -220,10 +220,10 @@ Annotation format (YOLO): `class_id center_x center_y width height` (normalized 
 
 1. Use the Training Tool to collect screenshots from your target game
 2. Label UI elements using [LabelImg](https://github.com/HumanSignal/labelImg) (annotations in `training_data/{game}/labels/`)
-3. Train a YOLOv8 model:
+3. Train a YOLOv11 model:
    ```python
    from ultralytics import YOLO
-   model = YOLO('yolov8n.pt')
+   model = YOLO('yolo11n.pt')
    model.train(data='your_dataset.yaml', epochs=100)
    ```
 4. Export to ONNX:
@@ -269,8 +269,15 @@ If the application crashes, check `crash_log.txt` in the application directory f
 
 MIT License - See LICENSE file for details.
 
+## Support
+
+- **GitHub**: [https://github.com/JPDoesDev/GamingVision](https://github.com/JPDoesDev/GamingVision)
+- **Issues**: [Report bugs or request features](https://github.com/JPDoesDev/GamingVision/issues)
+- **Website**: [www.jpdoes.dev](https://www.jpdoes.dev)
+- **Contact**: jpdoesdev@gmail.com
+
 ## Credits
 
 - Built on the foundation of NoMansAccess Python project
-- Uses [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) for object detection
+- Uses [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) for object detection
 - Uses [ONNX Runtime](https://onnxruntime.ai/) for inference

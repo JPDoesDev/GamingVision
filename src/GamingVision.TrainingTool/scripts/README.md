@@ -54,12 +54,12 @@ GAME_ID = "arc_raiders"
 MODEL_NAME = "ArcRaidersModel"
 
 # Base model (n=fast, s=balanced, m=accurate)
-BASE_MODEL = "yolov8n.pt"
+BASE_MODEL = "yolo11n.pt"
 ```
 
 ## Training Tips
 
-- **Start with yolov8n.pt** for faster iteration
+- **Start with yolo11n.pt** for faster iteration
 - **100+ labeled images** recommended
 - **150 epochs** is a good starting point
 - Watch for overfitting (val loss increasing while train loss decreases)

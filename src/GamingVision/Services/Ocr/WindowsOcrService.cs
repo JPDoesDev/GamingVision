@@ -3,6 +3,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
+using GamingVision.Utilities;
 
 namespace GamingVision.Services.Ocr;
 
@@ -76,15 +77,25 @@ public class WindowsOcrService : IOcrService
         OcrRegion region)
     {
         if (_ocrEngine == null)
+        {
+            Logger.Warn("ExtractTextAsync: OCR engine is null");
             return string.Empty;
+        }
 
         try
         {
-            // Validate and clamp region bounds
-            int x = Math.Max(0, Math.Min(region.X, frameWidth - 1));
-            int y = Math.Max(0, Math.Min(region.Y, frameHeight - 1));
-            int width = Math.Max(1, Math.Min(region.Width, frameWidth - x));
-            int height = Math.Max(1, Math.Min(region.Height, frameHeight - y));
+            // Add padding around the region to give OCR more context
+            // Windows OCR works better with some margin around text
+            const int padding = 10;
+
+            int x = Math.Max(0, region.X - padding);
+            int y = Math.Max(0, region.Y - padding);
+            int x2 = Math.Min(frameWidth, region.X + region.Width + padding);
+            int y2 = Math.Min(frameHeight, region.Y + region.Height + padding);
+            int width = x2 - x;
+            int height = y2 - y;
+
+            Logger.Log($"ExtractTextAsync: Region '{region.Label}' original ({region.X},{region.Y})-({region.X + region.Width},{region.Y + region.Height}), padded ({x},{y})-({x2},{y2}), size {width}x{height}");
 
             // Create a cropped bitmap for the region
             var softwareBitmap = CreateCroppedBitmap(
@@ -92,7 +103,10 @@ public class WindowsOcrService : IOcrService
                 x, y, width, height);
 
             if (softwareBitmap == null)
+            {
+                Logger.Warn("ExtractTextAsync: Failed to create cropped bitmap");
                 return string.Empty;
+            }
 
             // Run OCR
             var result = await _ocrEngine.RecognizeAsync(softwareBitmap);
@@ -100,11 +114,14 @@ public class WindowsOcrService : IOcrService
             // Clean up
             softwareBitmap.Dispose();
 
-            return result?.Text ?? string.Empty;
+            var text = result?.Text ?? string.Empty;
+            Logger.Log($"ExtractTextAsync: OCR result for '{region.Label}': '{text}' (lines: {result?.Lines?.Count ?? 0})");
+
+            return text;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"OCR extraction error: {ex.Message}");
+            Logger.Error($"ExtractTextAsync error for '{region.Label}'", ex);
             return string.Empty;
         }
     }

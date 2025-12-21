@@ -2,7 +2,7 @@
 
 ## Model Information
 - **Model File:** NoMansModel.onnx
-- **Base Architecture:** YOLOv8n
+- **Base Architecture:** YOLOv11n
 - **Input Size:** 640x640
 - **Training Data:** Custom labeled screenshots from No Man's Sky
 
@@ -18,8 +18,8 @@ The model was trained to detect 8 classes (defined in `NoMansModel.txt`):
 | 3 | `controls` | Control prompts and button indicators |
 | 4 | `item` | Popup in center of screen when hovering over in-world minerals or items |
 | 5 | `quest` | Quest block in the bottom right of the screen |
-| 6 | `junk` | Low-priority or irrelevant UI elements |
-| 7 | `menu_labeld` | Labeled menu elements |
+| 6 | `junk` | Unused class due to mislabel early in model creation |
+| 7 | `menu_labeld` | Labeled menu tab elements |
 
 ## Recommended Configuration
 
@@ -32,20 +32,3 @@ The model was trained to detect 8 classes (defined in `NoMansModel.txt`):
 - `quest` - Quest log information
 - `controls` - Control prompts
 - `menu_labeld` - Menu labels
-
-## Extracting Labels from ONNX Models
-
-If you need to verify or extract class labels from an ONNX model, use this Python script:
-
-```python
-import onnx
-
-model = onnx.load('NoMansModel.onnx')
-for prop in model.metadata_props:
-    if prop.key == 'names':
-        print(f"Classes: {prop.value}")
-```
-
-## Original Project
-
-This model was originally developed for the [NoMansAccess](https://github.com/JPDoesDev/NoMansAccess) Python project.

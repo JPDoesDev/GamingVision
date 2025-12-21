@@ -1,12 +1,22 @@
 {
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "arc_raiders_model.onnx",
-  "windowTitle": "arc_raiders.exe",
-  "primaryLabels": [],
-  "secondaryLabels": [],
+  "modelFile": "ArcRaidersModel_v20251220_214214.onnx",
+  "windowTitle": "ARC Raiders",
+  "primaryLabels": [
+    "inv-title",
+    "quick_menu",
+    "st-title"
+  ],
+  "secondaryLabels": [
+    "inv-info",
+    "st-info"
+  ],
   "tertiaryLabels": [],
-  "labelPriority": [],
+  "labelPriority": [
+    "inv-title",
+    "inv-info"
+  ],
   "hotkeys": {
     "readPrimary": "Alt\u002B1",
     "readSecondary": "Alt\u002B2",
@@ -16,7 +26,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "window",
+    "method": "fullscreen",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -24,24 +34,24 @@
   },
   "tts": {
     "engine": "sapi",
-    "primaryVoice": "Microsoft David",
-    "primaryRate": 3,
-    "secondaryVoice": "Microsoft David",
-    "secondaryRate": 0,
-    "tertiaryVoice": "Microsoft David",
-    "tertiaryRate": 0,
-    "volume": 100
+    "primaryVoice": "Microsoft David Desktop",
+    "primaryRate": 6,
+    "secondaryVoice": "Microsoft David Desktop",
+    "secondaryRate": 6,
+    "tertiaryVoice": "Microsoft David Desktop",
+    "tertiaryRate": 6,
+    "volume": 84
   },
   "detection": {
-    "autoReadCooldown": 2000,
-    "confidenceThreshold": 0.3,
-    "autoReadConfidenceThreshold": 0.6,
+    "autoReadCooldown": 500,
+    "confidenceThreshold": 0.1,
+    "autoReadConfidenceThreshold": 0.1,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
-    "autoReadEnabled": false,
+    "autoReadEnabled": true,
     "onlyReadChanges": true,
-    "readPrimaryLabelAloud": true,
+    "readPrimaryLabelAloud": false,
     "readSecondaryLabelAloud": false,
     "readTertiaryLabelAloud": false
   }

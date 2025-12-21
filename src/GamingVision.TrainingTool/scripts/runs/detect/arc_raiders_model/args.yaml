@@ -1,6 +1,6 @@
 task: detect
 mode: train
-model: yolov8n.pt
+model: yolo11n.pt
 data: D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\dataset.yaml
 epochs: 150
 time: null

@@ -275,7 +275,7 @@ GAME_ID = "arc_raiders"
 MODEL_NAME = "ArcRaidersModel"
 
 # Base YOLO model (n=fast, s=balanced, m=accurate)
-BASE_MODEL = "yolov8n.pt"
+BASE_MODEL = "yolo11n.pt"
 ```
 
 ### Split Dataset
@@ -456,7 +456,7 @@ Edit `GameModels/{game_id}/game_config.json`:
 
 ### Training
 
-- **Start small**: Begin with `yolov8n.pt` for faster iteration
+- **Start small**: Begin with `yolo11n.pt` for faster iteration
 - **Watch metrics**: If validation loss increases while training loss decreases, you're overfitting
 - **Augmentation**: YOLO applies augmentation automatically (flips, scaling, etc.)
 
@@ -464,9 +464,9 @@ Edit `GameModels/{game_id}/game_config.json`:
 
 | Model | Speed | Accuracy | Use Case |
 |-------|-------|----------|----------|
-| YOLOv8n | Fastest | Good | Real-time, limited GPU |
-| YOLOv8s | Fast | Better | Balanced |
-| YOLOv8m | Medium | Best | High accuracy needed |
+| YOLOv11n | Fastest | Good | Real-time, limited GPU |
+| YOLOv11s | Fast | Better | Balanced |
+| YOLOv11m | Medium | Best | High accuracy needed |
 
 ### Troubleshooting
 

@@ -4,3 +4,15 @@ export_model.py
 Debug
 Release
 .vs
+
+# Build artifacts
+bin/
+obj/
+releases/
+
+# Logs
+logs/
+*.log
+/CLAUDE.md
+/build-release.ps1
+/src/GamingVision.TrainingTool/training_data

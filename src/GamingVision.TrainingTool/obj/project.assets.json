@@ -212,7 +212,7 @@
           "buildTransitive/net6.0/System.Text.Json.targets": {}
         }
       },
-      "GamingVision/1.0.0": {
+      "GamingVision/0.1.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
@@ -397,7 +397,7 @@
           "buildTransitive/net6.0/System.Text.Json.targets": {}
         }
       },
-      "GamingVision/1.0.0": {
+      "GamingVision/0.1.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
@@ -840,7 +840,7 @@
         "useSharedDesignerContext.txt"
       ]
     },
-    "GamingVision/1.0.0": {
+    "GamingVision/0.1.0": {
       "type": "project",
       "path": "../GamingVision/GamingVision.csproj",
       "msbuildProject": "../GamingVision/GamingVision.csproj"
@@ -848,7 +848,7 @@
   },
   "projectFileDependencyGroups": {
     "net8.0-windows10.0.22621": [
-      "GamingVision >= 1.0.0"
+      "GamingVision >= 0.1.0"
     ]
   },
   "packageFolders": {

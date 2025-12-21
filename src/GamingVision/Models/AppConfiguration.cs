@@ -8,7 +8,7 @@ public class AppConfiguration
     /// <summary>
     /// Configuration file version for migration purposes.
     /// </summary>
-    public string Version { get; set; } = "1.0";
+    public string Version { get; set; } = "0.1.0";
 
     /// <summary>
     /// Currently selected game profile identifier.
@@ -38,7 +38,7 @@ public class AppConfiguration
     /// <summary>
     /// Enable debug logging to file.
     /// </summary>
-    public bool EnableLogging { get; set; } = false;
+    public bool EnableLogging { get; set; } = true;
 
     /// <summary>
     /// Log file path (relative to app directory or absolute).
@@ -55,13 +55,13 @@ public class AppConfiguration
     /// </summary>
     public static AppConfiguration CreateDefault() => new()
     {
-        Version = "1.0",
+        Version = "0.1.0",
         SelectedGame = "no_mans_sky",
         UseDirectML = true,
         AutoStartDetection = false,
         MinimizeToTray = false,
         StartMinimized = false,
-        EnableLogging = false,
+        EnableLogging = true,
         LogFilePath = "logs/gamingvision.log",
         CheckForUpdates = true
     };

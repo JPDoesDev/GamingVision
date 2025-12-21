@@ -2,7 +2,7 @@
 Train YOLO model for GamingVision.
 
 This script:
-1. Loads a pretrained YOLOv8 model
+1. Loads a pretrained YOLOv11 model
 2. Trains it on your labeled dataset
 3. Saves the best model to runs/detect/{game_id}_model/
 
