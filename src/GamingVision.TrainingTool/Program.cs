@@ -336,7 +336,7 @@ class Program
         Console.WriteLine("Controls:");
         Console.ResetColor();
         Console.WriteLine("  F1     - Capture screenshot");
-        Console.WriteLine("  Escape - Back to menu");
+        Console.WriteLine("  Ctrl+Q - Back to menu");
 
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("════════════════════════════════════════════════════════════════");
@@ -365,7 +365,7 @@ class Program
             }
         };
 
-        hotkeyService.EscapePressed += () =>
+        hotkeyService.CtrlQPressed += () =>
         {
             sessionActive = false;
         };

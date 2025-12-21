@@ -11,13 +11,13 @@ Prerequisites:
     2. Run split_dataset.py to create train/val split
 
 Usage:
-    py -3.9 train_model.py
+    py -3.10 train_model.py
 
     # Or with custom epochs:
-    py -3.9 train_model.py --epochs 200
+    py -3.10 train_model.py --epochs 200
 
     # Resume interrupted training:
-    py -3.9 train_model.py --resume
+    py -3.10 train_model.py --resume
 """
 
 import argparse
@@ -63,7 +63,7 @@ def train_model(epochs: int = None, resume: bool = False):
         from ultralytics import YOLO
     except ImportError:
         print("ERROR: ultralytics not installed!")
-        print("Run: py -3.9 -m pip install ultralytics")
+        print("Run: py -3.10 -m pip install ultralytics")
         return None
 
     # Use custom epochs if provided
@@ -95,6 +95,7 @@ def train_model(epochs: int = None, resume: bool = False):
         # Build training arguments
         train_args = {
             "data": str(DATASET_YAML),
+            "device": TRAINING_CONFIG["device"],  # GPU/CPU selection
             "epochs": training_epochs,
             "imgsz": TRAINING_CONFIG["imgsz"],
             "batch": TRAINING_CONFIG["batch"],

@@ -1,8 +1,0 @@
-title
-info
-other
-controls
-item
-quest
-junk
-menu_labeld

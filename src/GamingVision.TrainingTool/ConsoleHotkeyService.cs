@@ -10,10 +10,11 @@ public class ConsoleHotkeyService : IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
     private const uint MOD_NONE = 0x0000;
+    private const uint MOD_CONTROL = 0x0002;
 
     // Virtual key codes
     private const uint VK_F1 = 0x70;
-    private const uint VK_ESCAPE = 0x1B;
+    private const uint VK_Q = 0x51;
 
     private Thread? _messageThread;
     private volatile bool _running;
@@ -21,7 +22,7 @@ public class ConsoleHotkeyService : IDisposable
     private IntPtr _threadId;
 
     public event Action? F1Pressed;
-    public event Action? EscapePressed;
+    public event Action? CtrlQPressed;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -103,16 +104,16 @@ public class ConsoleHotkeyService : IDisposable
 
         // Register hotkeys on this thread
         bool f1Registered = RegisterHotKey(IntPtr.Zero, _hotkeyId, MOD_NONE, VK_F1);
-        bool escRegistered = RegisterHotKey(IntPtr.Zero, _hotkeyId + 1, MOD_NONE, VK_ESCAPE);
+        bool ctrlQRegistered = RegisterHotKey(IntPtr.Zero, _hotkeyId + 1, MOD_CONTROL, VK_Q);
 
         if (!f1Registered)
         {
             Console.WriteLine("Warning: Could not register F1 hotkey (may be in use by another application)");
         }
 
-        if (!escRegistered)
+        if (!ctrlQRegistered)
         {
-            Console.WriteLine("Warning: Could not register Escape hotkey");
+            Console.WriteLine("Warning: Could not register Ctrl+Q hotkey");
         }
 
         try
@@ -132,8 +133,8 @@ public class ConsoleHotkeyService : IDisposable
                         }
                         else if (hotkeyId == _hotkeyId + 1)
                         {
-                            // Escape pressed
-                            EscapePressed?.Invoke();
+                            // Ctrl+Q pressed
+                            CtrlQPressed?.Invoke();
                         }
                     }
 

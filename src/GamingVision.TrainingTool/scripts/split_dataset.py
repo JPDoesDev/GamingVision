@@ -10,7 +10,7 @@ This script:
 Run this AFTER labeling images with LabelImg.
 
 Usage:
-    py -3.9 split_dataset.py
+    py -3.10 split_dataset.py
 """
 
 import os

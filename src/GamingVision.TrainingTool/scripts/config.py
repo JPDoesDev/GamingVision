@@ -51,17 +51,22 @@ GAME_MODELS_DIR = PROJECT_ROOT / "GameModels" / GAME_ID
 # =============================================================================
 
 TRAINING_CONFIG = {
+    # Device for training: 'cuda' for GPU, 'cpu' for CPU, or 0 for first GPU
+    # Use 'cuda' to force GPU training (recommended)
+    "device": "cuda",
+
     # Number of training epochs (more = better but slower)
     # Recommended: 100-300 for good results
     "epochs": 150,
 
     # Image size for training (larger = more detail but slower)
-    # 640 is standard, 416 for faster training
-    "imgsz": 640,
+    # 1440 recommended for UI/text detection, 640 for faster training
+    "imgsz": 1440,
 
-    # Batch size (reduce if you run out of GPU memory)
+    # Batch size: float 0-1 = fraction of GPU memory, int = fixed batch size
+    # 0.70 = use 70% of GPU memory (recommended for GPU training)
     # -1 = auto-detect based on GPU memory
-    "batch": -1,
+    "batch": 0.70,
 
     # Patience for early stopping (stop if no improvement for N epochs)
     "patience": 50,
@@ -105,7 +110,7 @@ EXPORT_CONFIG = {
     "opset": 12,
     "simplify": True,
     "dynamic": False,
-    "imgsz": 640,
+    "imgsz": 1440,  # Should match training imgsz
 }
 
 # =============================================================================
@@ -167,9 +172,16 @@ def print_config():
     print(f"Training Data:  {TRAINING_DATA_DIR}")
     print(f"Output Dir:     {GAME_MODELS_DIR}")
     print("-" * 60)
+    print(f"Device:         {TRAINING_CONFIG['device']}")
     print(f"Epochs:         {TRAINING_CONFIG['epochs']}")
     print(f"Image Size:     {TRAINING_CONFIG['imgsz']}")
-    print(f"Batch Size:     {TRAINING_CONFIG['batch']} (auto)" if TRAINING_CONFIG['batch'] == -1 else f"Batch Size:     {TRAINING_CONFIG['batch']}")
+    batch = TRAINING_CONFIG['batch']
+    if batch == -1:
+        print(f"Batch Size:     auto")
+    elif isinstance(batch, float) and 0 < batch < 1:
+        print(f"Batch Size:     {batch:.0%} of GPU memory")
+    else:
+        print(f"Batch Size:     {batch}")
     print("=" * 60)
 
 

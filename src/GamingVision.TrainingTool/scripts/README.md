@@ -8,19 +8,19 @@ Python scripts for training YOLO models for GamingVision.
 cd D:\Dev\GamingVision\src\GamingVision.TrainingTool\scripts
 
 # 1. Install dependencies
-py -3.9 -m pip install -r requirements.txt
+py -3.10 -m pip install -r requirements.txt
 
 # 2. Configure for your game (edit GAME_ID and MODEL_NAME)
 notepad config.py
 
 # 3. Split dataset into train/val
-py -3.9 split_dataset.py
+py -3.10 split_dataset.py
 
 # 4. Train the model
-py -3.9 train_model.py
+py -3.10 train_model.py
 
 # 5. Export and deploy
-py -3.9 export_model.py
+py -3.10 export_model.py
 ```
 
 ## Scripts

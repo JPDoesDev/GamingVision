@@ -20,18 +20,21 @@ This guide covers the complete workflow for creating a custom YOLO model for a n
 
 ### Python Environment
 
-Install Python 3.9+ and the required packages:
+Install Python 3.10+ and the required packages:
 
 ```powershell
 # Navigate to scripts folder
 cd D:\Dev\GamingVision\src\GamingVision.TrainingTool\scripts
 
-# Install all dependencies from requirements.txt
-py -3.9 -m pip install -r requirements.txt
+# Install PyTorch with CUDA 12.6 first
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+
+# Install remaining dependencies from requirements.txt
+py -3.10 -m pip install -r requirements.txt
 
 # Verify installations
-py -3.9 -c "import labelImg; print('LabelImg OK')"
-py -3.9 -c "from ultralytics import YOLO; print('Ultralytics OK')"
+py -3.10 -c "import labelImg; print('LabelImg OK')"
+py -3.10 -c "from ultralytics import YOLO; print('Ultralytics OK')"
 ```
 
 ### Directory Structure
@@ -208,12 +211,12 @@ close-button
 
 ```powershell
 # Replace {game_id} with your actual game ID (e.g., arc_raiders)
-py -3.9 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\labels"
+py -3.10 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\labels"
 ```
 
 **Example for arc_raiders:**
 ```powershell
-py -3.9 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\labels"
+py -3.10 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\labels"
 ```
 
 ### LabelImg Settings
@@ -281,7 +284,7 @@ Run the split script to create train/val sets and generate `dataset.yaml`:
 
 ```powershell
 cd D:\Dev\GamingVision\src\GamingVision.TrainingTool\scripts
-py -3.9 split_dataset.py
+py -3.10 split_dataset.py
 ```
 
 This script:
@@ -310,7 +313,7 @@ training_data/{game_id}/
 
 ```powershell
 cd D:\Dev\GamingVision\src\GamingVision.TrainingTool\scripts
-py -3.9 train_model.py
+py -3.10 train_model.py
 ```
 
 The script uses optimized settings for UI detection:
@@ -324,10 +327,10 @@ The script uses optimized settings for UI detection:
 
 ```powershell
 # Train with custom epoch count
-py -3.9 train_model.py --epochs 200
+py -3.10 train_model.py --epochs 200
 
 # Resume interrupted training
-py -3.9 train_model.py --resume
+py -3.10 train_model.py --resume
 ```
 
 ### Training Parameters (in config.py)
@@ -352,7 +355,7 @@ Training outputs to `scripts/runs/detect/{game_id}_model/`:
 If training is interrupted:
 
 ```powershell
-py -3.9 train_model.py --resume
+py -3.10 train_model.py --resume
 ```
 
 ---
@@ -363,7 +366,7 @@ py -3.9 train_model.py --resume
 
 ```powershell
 cd D:\Dev\GamingVision\src\GamingVision.TrainingTool\scripts
-py -3.9 export_model.py
+py -3.10 export_model.py
 ```
 
 This script automatically:
@@ -377,10 +380,10 @@ This script automatically:
 
 ```powershell
 # Use last.pt instead of best.pt
-py -3.9 export_model.py --use-last
+py -3.10 export_model.py --use-last
 
 # Export only, don't copy to GameModels
-py -3.9 export_model.py --no-deploy
+py -3.10 export_model.py --no-deploy
 ```
 
 ### Output Files
@@ -508,20 +511,20 @@ Edit `GameModels/{game_id}/game_config.json`:
 dotnet run --project src\GamingVision.TrainingTool
 
 # 2. Label images (replace {game_id} with your game)
-py -3.9 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\labels"
+py -3.10 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\labels"
 
 # 3. Configure (edit GAME_ID and MODEL_NAME)
 notepad src\GamingVision.TrainingTool\scripts\config.py
 
 # 4. Split dataset
 cd src\GamingVision.TrainingTool\scripts
-py -3.9 split_dataset.py
+py -3.10 split_dataset.py
 
 # 5. Train model
-py -3.9 train_model.py
+py -3.10 train_model.py
 
 # 6. Export and deploy
-py -3.9 export_model.py
+py -3.10 export_model.py
 
 # 7. Run GamingVision
 cd D:\Dev\GamingVision
