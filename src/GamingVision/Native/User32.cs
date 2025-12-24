@@ -6,7 +6,7 @@ namespace GamingVision.Native;
 /// <summary>
 /// User32.dll P/Invoke declarations.
 /// </summary>
-internal static class User32
+public static class User32
 {
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -54,6 +54,12 @@ internal static class User32
     public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip,
                                                    EnumMonitorsDelegate lpfnEnum, IntPtr dwData);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     public delegate bool EnumMonitorsDelegate(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
 
@@ -65,6 +71,12 @@ internal static class User32
     public const uint MOD_NOREPEAT = 0x4000;
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    // Extended window styles for click-through overlay
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const int WS_EX_LAYERED = 0x00080000;
+    public const int WS_EX_TOOLWINDOW = 0x00000080;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

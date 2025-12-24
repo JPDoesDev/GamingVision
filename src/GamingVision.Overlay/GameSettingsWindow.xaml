@@ -1,0 +1,85 @@
+<Window x:Class="GamingVision.Overlay.GameSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Game Settings"
+        Width="500"
+        Height="300"
+        MinWidth="400"
+        MinHeight="250"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Text="Configure Game Profile"
+                   FontSize="{StaticResource HeaderFontSize}"
+                   FontWeight="Bold"
+                   Foreground="{StaticResource AccentBrush}"
+                   Margin="0,0,0,15"/>
+
+        <!-- Settings -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Display Name -->
+            <TextBlock Grid.Row="0" Grid.Column="0"
+                       Text="Display Name:"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <TextBox Grid.Row="0" Grid.Column="1"
+                     Margin="15,5"
+                     x:Name="DisplayNameTextBox"
+                     AutomationProperties.Name="Game Display Name"/>
+
+            <!-- Model File -->
+            <TextBlock Grid.Row="1" Grid.Column="0"
+                       Text="Model File:"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <ComboBox Grid.Row="1" Grid.Column="1"
+                      Margin="15,5"
+                      x:Name="ModelFileComboBox"
+                      AutomationProperties.Name="ONNX Model File"/>
+
+            <!-- Monitor Selection -->
+            <TextBlock Grid.Row="2" Grid.Column="0"
+                       Text="Monitor:"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <ComboBox Grid.Row="2" Grid.Column="1"
+                      Margin="15,5"
+                      x:Name="MonitorComboBox"
+                      AutomationProperties.Name="Monitor Selection"/>
+        </Grid>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,15,0,0">
+            <Button Content="Save"
+                    Click="SaveButton_Click"
+                    MinWidth="100"
+                    Background="{StaticResource AccentBrush}"
+                    AutomationProperties.Name="Save Settings"/>
+            <Button Content="Cancel"
+                    Click="CancelButton_Click"
+                    MinWidth="100"
+                    AutomationProperties.Name="Cancel"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -74,6 +74,11 @@ public class GameProfile
     public DetectionSettings Detection { get; set; } = new();
 
     /// <summary>
+    /// Visual overlay settings for bounding box display.
+    /// </summary>
+    public OverlaySettings? Overlay { get; set; }
+
+    /// <summary>
     /// Creates a deep copy of this game profile.
     /// </summary>
     public GameProfile Clone() => new()
@@ -90,6 +95,7 @@ public class GameProfile
         Hotkeys = Hotkeys.Clone(),
         Capture = Capture.Clone(),
         Tts = Tts.Clone(),
-        Detection = Detection.Clone()
+        Detection = Detection.Clone(),
+        Overlay = Overlay?.Clone()
     };
 }
