@@ -3,6 +3,13 @@
   "displayName": "ARC Raiders",
   "modelFile": "ArcRaidersModel_v20251222_203924.onnx",
   "windowTitle": "ARC Raiders",
+  "labels": [
+    { "name": "inv-title", "description": "Inventory item titles and names" },
+    { "name": "inv-info", "description": "Inventory item descriptions and stats" },
+    { "name": "quick_menu", "description": "Quick access menu options" },
+    { "name": "st-title", "description": "Skill tree node titles" },
+    { "name": "st-info", "description": "Skill tree node descriptions" }
+  ],
   "primaryLabels": [
     "inv-title",
     "quick_menu",

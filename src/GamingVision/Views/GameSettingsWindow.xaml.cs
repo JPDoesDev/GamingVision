@@ -51,24 +51,18 @@ public partial class GameSettingsWindow : Window
         }
     }
 
-    private void ViewLabelsButton_Click(object sender, RoutedEventArgs e)
+    private void ConfigurePrimaryButton_Click(object sender, RoutedEventArgs e)
     {
-        var labels = _viewModel.GetAvailableLabels();
+        _viewModel.OpenLabelConfiguration("Primary", this);
+    }
 
-        if (labels.Count == 0)
-        {
-            MessageBox.Show(
-                "No labels available. Labels are defined in the game's labelPriority list in game_config.json.",
-                "Available Labels",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
+    private void ConfigureSecondaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.OpenLabelConfiguration("Secondary", this);
+    }
 
-        var dialog = new AvailableLabelsDialog(labels)
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
+    private void ConfigureTertiaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.OpenLabelConfiguration("Tertiary", this);
     }
 }

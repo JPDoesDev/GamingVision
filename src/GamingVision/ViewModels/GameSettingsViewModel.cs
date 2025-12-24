@@ -42,14 +42,20 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _windowTitle = "";
 
+    // Label lists (internal storage)
+    private List<string> _primaryLabelsList = [];
+    private List<string> _secondaryLabelsList = [];
+    private List<string> _tertiaryLabelsList = [];
+
+    // Display properties for labels summary
     [ObservableProperty]
-    private string _primaryLabels = "";
+    private string _primaryLabelsDisplay = "";
 
     [ObservableProperty]
-    private string _secondaryLabels = "";
+    private string _secondaryLabelsDisplay = "";
 
     [ObservableProperty]
-    private string _tertiaryLabels = "";
+    private string _tertiaryLabelsDisplay = "";
 
     [ObservableProperty]
     private bool _canDeleteGame;
@@ -136,9 +142,6 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _readTertiaryLabelAloud = false;
 
-    [ObservableProperty]
-    private string _availableLabelsInfo = "";
-
     public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
     {
         _appConfig = appConfig;
@@ -146,48 +149,6 @@ public partial class GameSettingsViewModel : ObservableObject
 
         LoadAvailableVoices();
         LoadGames();
-    }
-
-    /// <summary>
-    /// Gets the available labels from the model's label file (.txt file alongside .onnx).
-    /// </summary>
-    public List<string> GetAvailableLabels()
-    {
-        if (_currentProfile == null || string.IsNullOrEmpty(_currentProfile.ModelFile))
-            return [];
-
-        try
-        {
-            // Get the model path and derive the labels file path
-            var modelPath = _configManager.GetModelPath(_currentProfile.GameId, _currentProfile.ModelFile);
-            var labelsPath = Path.ChangeExtension(modelPath, ".txt");
-
-            if (File.Exists(labelsPath))
-            {
-                return File.ReadAllLines(labelsPath)
-                    .Where(l => !string.IsNullOrWhiteSpace(l))
-                    .ToList();
-            }
-
-            // Fallback: try modelname_labels.txt
-            var dir = Path.GetDirectoryName(modelPath) ?? ".";
-            var name = Path.GetFileNameWithoutExtension(modelPath);
-            labelsPath = Path.Combine(dir, $"{name}_labels.txt");
-
-            if (File.Exists(labelsPath))
-            {
-                return File.ReadAllLines(labelsPath)
-                    .Where(l => !string.IsNullOrWhiteSpace(l))
-                    .ToList();
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error reading labels file: {ex.Message}");
-        }
-
-        // Final fallback: return LabelPriority from config
-        return _currentProfile?.LabelPriority ?? [];
     }
 
     private void LoadAvailableVoices()
@@ -243,9 +204,12 @@ public partial class GameSettingsViewModel : ObservableObject
         DisplayName = _currentProfile.DisplayName;
         ModelFile = _currentProfile.ModelFile;
         WindowTitle = _currentProfile.WindowTitle;
-        PrimaryLabels = string.Join(", ", _currentProfile.PrimaryLabels);
-        SecondaryLabels = string.Join(", ", _currentProfile.SecondaryLabels);
-        TertiaryLabels = string.Join(", ", _currentProfile.TertiaryLabels);
+
+        // Load label lists
+        _primaryLabelsList = [.. _currentProfile.PrimaryLabels];
+        _secondaryLabelsList = [.. _currentProfile.SecondaryLabels];
+        _tertiaryLabelsList = [.. _currentProfile.TertiaryLabels];
+        UpdateLabelDisplays();
 
         // Can only delete if there's more than one game
         CanDeleteGame = Games.Count > 1;
@@ -293,9 +257,9 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.DisplayName = DisplayName;
         _currentProfile.ModelFile = ModelFile;
         _currentProfile.WindowTitle = WindowTitle;
-        _currentProfile.PrimaryLabels = ParseLabelList(PrimaryLabels);
-        _currentProfile.SecondaryLabels = ParseLabelList(SecondaryLabels);
-        _currentProfile.TertiaryLabels = ParseLabelList(TertiaryLabels);
+        _currentProfile.PrimaryLabels = [.. _primaryLabelsList];
+        _currentProfile.SecondaryLabels = [.. _secondaryLabelsList];
+        _currentProfile.TertiaryLabels = [.. _tertiaryLabelsList];
 
         // Update display name in list
         if (SelectedGame != null)
@@ -338,13 +302,80 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Detection.ReadTertiaryLabelAloud = ReadTertiaryLabelAloud;
     }
 
-    private static List<string> ParseLabelList(string input)
+    private void UpdateLabelDisplays()
     {
-        if (string.IsNullOrWhiteSpace(input))
-            return [];
+        PrimaryLabelsDisplay = _primaryLabelsList.Count > 0
+            ? string.Join(", ", _primaryLabelsList)
+            : "(none configured)";
+        SecondaryLabelsDisplay = _secondaryLabelsList.Count > 0
+            ? string.Join(", ", _secondaryLabelsList)
+            : "(none configured)";
+        TertiaryLabelsDisplay = _tertiaryLabelsList.Count > 0
+            ? string.Join(", ", _tertiaryLabelsList)
+            : "(none configured)";
+    }
 
-        return input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .ToList();
+    /// <summary>
+    /// Opens the label configuration window for a specific tier.
+    /// </summary>
+    public void OpenLabelConfiguration(string tierName, System.Windows.Window owner)
+    {
+        if (_currentProfile == null) return;
+
+        // Determine which label list to use
+        List<string> currentLabels = tierName switch
+        {
+            "Primary" => _primaryLabelsList,
+            "Secondary" => _secondaryLabelsList,
+            "Tertiary" => _tertiaryLabelsList,
+            _ => []
+        };
+
+        bool readLabelAloud = tierName switch
+        {
+            "Primary" => ReadPrimaryLabelAloud,
+            "Secondary" => ReadSecondaryLabelAloud,
+            "Tertiary" => ReadTertiaryLabelAloud,
+            _ => false
+        };
+
+        // Only pass autoReadEnabled for Primary tier
+        bool? autoReadEnabled = tierName == "Primary" ? AutoReadEnabled : null;
+
+        var viewModel = new LabelConfigurationViewModel(
+            tierName,
+            _currentProfile.Labels,
+            currentLabels,
+            readLabelAloud,
+            autoReadEnabled);
+
+        var window = new Views.LabelConfigurationWindow(viewModel)
+        {
+            Owner = owner
+        };
+
+        if (window.ShowDialog() == true)
+        {
+            // Update the label list based on tier
+            var newLabels = viewModel.GetSelectedLabelNames();
+            switch (tierName)
+            {
+                case "Primary":
+                    _primaryLabelsList = newLabels;
+                    ReadPrimaryLabelAloud = viewModel.ReadLabelAloud;
+                    AutoReadEnabled = viewModel.AutoReadEnabled;
+                    break;
+                case "Secondary":
+                    _secondaryLabelsList = newLabels;
+                    ReadSecondaryLabelAloud = viewModel.ReadLabelAloud;
+                    break;
+                case "Tertiary":
+                    _tertiaryLabelsList = newLabels;
+                    ReadTertiaryLabelAloud = viewModel.ReadLabelAloud;
+                    break;
+            }
+            UpdateLabelDisplays();
+        }
     }
 
     [RelayCommand]
@@ -383,7 +414,11 @@ public partial class GameSettingsViewModel : ObservableObject
         var newProfile = new GameProfile
         {
             GameId = key,
-            DisplayName = "New Game"
+            DisplayName = "New Game",
+            Labels =
+            [
+                new LabelDefinition { Name = "example_label", Description = "Example label - replace with your own" }
+            ]
         };
 
         // Save to file

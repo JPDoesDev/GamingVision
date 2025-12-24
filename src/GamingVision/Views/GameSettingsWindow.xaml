@@ -5,9 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Game Settings"
-        Height="550"
+        Height="825"
         Width="650"
-        MinHeight="500"
+        MinHeight="750"
         MinWidth="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
@@ -60,11 +60,6 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Display Name:" VerticalAlignment="Center" Margin="0,8"/>
@@ -88,48 +83,30 @@
                                 x:Name="PickWindowButton" Click="PickWindowButton_Click"
                                 AutomationProperties.Name="Pick Window from Running Applications"/>
 
-                        <!-- Available Labels Button -->
-                        <Button Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8"
-                                Content="View Available Labels..."
-                                x:Name="ViewLabelsButton" Click="ViewLabelsButton_Click"
-                                HorizontalAlignment="Left"
-                                AutomationProperties.Name="View Available Model Labels"/>
+                        <!-- Detection Label Configuration -->
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Primary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PrimaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                                   Foreground="Gray" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.Name="Primary Labels Summary"/>
+                        <Button Grid.Row="3" Grid.Column="2" Content="Configure..."
+                                x:Name="ConfigurePrimaryButton" Click="ConfigurePrimaryButton_Click"
+                                AutomationProperties.Name="Configure Primary Detection Labels"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Primary Labels:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
-                                 Text="{Binding PrimaryLabels, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Primary Detection Labels"
-                                 AutomationProperties.HelpText="Comma-separated list of labels that trigger auto-read"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SecondaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                                   Foreground="Gray" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.Name="Secondary Labels Summary"/>
+                        <Button Grid.Row="4" Grid.Column="2" Content="Configure..."
+                                x:Name="ConfigureSecondaryButton" Click="ConfigureSecondaryButton_Click"
+                                AutomationProperties.Name="Configure Secondary Detection Labels"/>
 
-                        <CheckBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,0,5,5"
-                                  Content="Read label aloud"
-                                  IsChecked="{Binding ReadPrimaryLabelAloud}"
-                                  AutomationProperties.Name="Read Primary Label Aloud"
-                                  AutomationProperties.HelpText="Speak the label name when reading primary objects"/>
-
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Secondary Labels:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
-                                 Text="{Binding SecondaryLabels, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Secondary Detection Labels"
-                                 AutomationProperties.HelpText="Comma-separated list of labels read on hotkey only"/>
-
-                        <CheckBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,0,5,5"
-                                  Content="Read label aloud"
-                                  IsChecked="{Binding ReadSecondaryLabelAloud}"
-                                  AutomationProperties.Name="Read Secondary Label Aloud"
-                                  AutomationProperties.HelpText="Speak the label name when reading secondary objects"/>
-
-                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Tertiary Labels:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
-                                 Text="{Binding TertiaryLabels, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Tertiary Detection Labels"
-                                 AutomationProperties.HelpText="Comma-separated list of labels read on third hotkey"/>
-
-                        <CheckBox Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,0,5,5"
-                                  Content="Read label aloud"
-                                  IsChecked="{Binding ReadTertiaryLabelAloud}"
-                                  AutomationProperties.Name="Read Tertiary Label Aloud"
-                                  AutomationProperties.HelpText="Speak the label name when reading tertiary objects"/>
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Tertiary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TertiaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                                   Foreground="Gray" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.Name="Tertiary Labels Summary"/>
+                        <Button Grid.Row="5" Grid.Column="2" Content="Configure..."
+                                x:Name="ConfigureTertiaryButton" Click="ConfigureTertiaryButton_Click"
+                                AutomationProperties.Name="Configure Tertiary Detection Labels"/>
                     </Grid>
                 </ScrollViewer>
             </TabItem>
@@ -325,25 +302,18 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8"
-                                  Content="Enable Auto-Read"
-                                  IsChecked="{Binding AutoReadEnabled}"
-                                  AutomationProperties.Name="Enable Auto-Read"
-                                  AutomationProperties.HelpText="When enabled, primary labels will be read automatically when detected"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-read Cooldown:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Auto-read Cooldown:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="500" Maximum="5000" Value="{Binding AutoReadCooldown}"
                                     TickFrequency="500" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Auto-read Cooldown"/>
                             <TextBlock Text="{Binding AutoReadCooldown, StringFormat={}{0} ms}" Margin="15,0,0,0" Width="70" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Auto-Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding AutoReadConfidenceThreshold}"
                                     TickFrequency="0.1" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Auto-Read Confidence Threshold"
@@ -351,8 +321,8 @@
                             <TextBlock Text="{Binding AutoReadConfidenceThreshold, StringFormat={}{0:F1}}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Manual Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Manual Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding ConfidenceThreshold}"
                                     TickFrequency="0.1" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Manual Read Confidence Threshold"

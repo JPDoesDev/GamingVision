@@ -1,0 +1,143 @@
+<Window x:Class="GamingVision.Views.LabelConfigurationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="{Binding WindowTitle}"
+        Height="700"
+        Width="600"
+        MinHeight="580"
+        MinWidth="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Label Configuration Window">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="250"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Instructions -->
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="Select labels to detect. Use Move Up/Down to set priority (top = highest priority)."/>
+
+        <!-- Selected Labels List -->
+        <GroupBox Grid.Row="1" Header="Selected Labels (Priority Order)">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ListBox Grid.Column="0"
+                         ItemsSource="{Binding SelectedLabels}"
+                         SelectedItem="{Binding SelectedItem}"
+                         AutomationProperties.Name="Selected Labels List">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="5,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Text="{Binding Name}"
+                                           FontWeight="SemiBold"
+                                           AutomationProperties.Name="Label Name"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Text="{Binding Description}"
+                                           Foreground="Gray"
+                                           FontSize="11"
+                                           AutomationProperties.Name="Label Description"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Move Up/Down and Remove Buttons -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+                    <Button Content="Move Up" Margin="0,0,0,5" Padding="10,5"
+                            Command="{Binding MoveUpCommand}"
+                            AutomationProperties.Name="Move Selected Label Up"/>
+                    <Button Content="Move Down" Margin="0,0,0,10" Padding="10,5"
+                            Command="{Binding MoveDownCommand}"
+                            AutomationProperties.Name="Move Selected Label Down"/>
+                    <Button Content="Remove" Padding="10,5"
+                            Command="{Binding RemoveLabelCommand}"
+                            AutomationProperties.Name="Remove Selected Label"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Add Label Section -->
+        <GroupBox Grid.Row="2" Header="Add Label" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <ComboBox Grid.Column="0"
+                          ItemsSource="{Binding AvailableLabelsToAdd}"
+                          SelectedItem="{Binding SelectedAvailableLabel}"
+                          AutomationProperties.Name="Available Labels to Add">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                <TextBlock Text=" - " Foreground="Gray"/>
+                                <TextBlock Text="{Binding Description}" Foreground="Gray"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <Button Grid.Column="1" Content="Add" Margin="10,0,0,0" Padding="15,5"
+                        Command="{Binding AddLabelCommand}"
+                        AutomationProperties.Name="Add Selected Label"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Options -->
+        <GroupBox Grid.Row="3" Header="Options" Margin="0,10,0,0">
+            <StackPanel>
+                <CheckBox Content="Enable Auto-Read"
+                          IsChecked="{Binding AutoReadEnabled}"
+                          Margin="5"
+                          Visibility="{Binding ShowAutoReadOption, Converter={StaticResource BoolToVisibility}}"
+                          AutomationProperties.Name="Enable Auto-Read"
+                          AutomationProperties.HelpText="When enabled, primary labels will be read automatically when detected"/>
+                <CheckBox Content="Read label name aloud when speaking"
+                          IsChecked="{Binding ReadLabelAloud}"
+                          Margin="5"
+                          AutomationProperties.Name="Read Label Name Aloud"
+                          AutomationProperties.HelpText="When enabled, the label name will be spoken before the detected text"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Save" Padding="20,8"
+                    Click="SaveButton_Click"
+                    AutomationProperties.Name="Save Label Configuration"/>
+            <Button Content="Cancel" Margin="10,0,0,0" Padding="20,8"
+                    Click="CancelButton_Click"
+                    AutomationProperties.Name="Cancel"/>
+        </StackPanel>
+    </Grid>
+</Window>

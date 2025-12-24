@@ -48,6 +48,12 @@ public class GameProfile
     public List<string> LabelPriority { get; set; } = [];
 
     /// <summary>
+    /// All available labels for this game with their descriptions.
+    /// Used for label configuration UI. Must be kept in sync with the model's classes.txt.
+    /// </summary>
+    public List<LabelDefinition> Labels { get; set; } = [];
+
+    /// <summary>
     /// Hotkey configuration for this game.
     /// </summary>
     public HotkeySettings Hotkeys { get; set; } = new();
@@ -80,6 +86,7 @@ public class GameProfile
         SecondaryLabels = [.. SecondaryLabels],
         TertiaryLabels = [.. TertiaryLabels],
         LabelPriority = [.. LabelPriority],
+        Labels = Labels.Select(l => l.Clone()).ToList(),
         Hotkeys = Hotkeys.Clone(),
         Capture = Capture.Clone(),
         Tts = Tts.Clone(),

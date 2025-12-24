@@ -3,6 +3,16 @@
   "displayName": "No Man\u0027s Sky",
   "modelFile": "NoMansModel.onnx",
   "windowTitle": "No Man\u0027s Sky",
+  "labels": [
+    { "name": "title", "description": "Main title text or headings" },
+    { "name": "item", "description": "Inventory items and pickups" },
+    { "name": "info", "description": "Informational text and tooltips" },
+    { "name": "quest", "description": "Quest objectives and mission text" },
+    { "name": "controls", "description": "Control prompts and button hints" },
+    { "name": "menu_labeld", "description": "Menu labels and navigation text" },
+    { "name": "other", "description": "Miscellaneous UI elements" },
+    { "name": "junk", "description": "Non-essential decorative text" }
+  ],
   "primaryLabels": [
     "title",
     "item"
