@@ -41,7 +41,7 @@
     "tertiaryVoice": "Microsoft David Desktop",
     "tertiaryRate": 6,
     "primaryDirectionalAudio": true,
-    "secondaryDirectionalAudio": false,
+    "secondaryDirectionalAudio": true,
     "tertiaryDirectionalAudio": true,
     "volume": 84
   },
