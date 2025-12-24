@@ -23,8 +23,8 @@ The model was trained to detect 5 classes (defined in `ArcRaidersModel_v20251220
 **Primary Labels** (auto-read, quick access):
 - `inv-title` - Inventory item titles
 - `quick_menu` - Quick menu options
-- `st-title` - Stash titles
+- `st-title` - Skill tree titles
 
 **Secondary Labels** (manual read, detailed info):
 - `inv-info` - Detailed inventory item descriptions
-- `st-info` - Stash item details
+- `st-info` - Skill tree details

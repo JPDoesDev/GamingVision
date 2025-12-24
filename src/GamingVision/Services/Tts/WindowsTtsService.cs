@@ -18,6 +18,7 @@ public class WindowsTtsService : ITtsService
     private readonly ConcurrentQueue<string> _speechQueue = new();
     private readonly object _speakLock = new();
     private readonly object _audioLock = new();
+    private volatile bool _stopRequested;
     private bool _isProcessingQueue;
     private bool _disposed;
     private List<VoiceInfo> _availableVoices = [];
@@ -135,14 +136,27 @@ public class WindowsTtsService : ITtsService
             Stop();
         }
 
+        // Clear stop flag for this new speech request
+        _stopRequested = false;
+
         await Task.Run(() =>
         {
+            MemoryStream? memoryStream = null;
+
+            // Render SAPI to memory stream (protected by _speakLock)
             lock (_speakLock)
             {
                 try
                 {
+                    // Check if stop was requested while waiting for lock
+                    if (_stopRequested)
+                    {
+                        Logger.Log("SpeakWithPanAsync: Stop requested, aborting render");
+                        return;
+                    }
+
                     // Render speech to WAV in memory
-                    var memoryStream = new MemoryStream();
+                    memoryStream = new MemoryStream();
                     _synthesizer.SetOutputToWaveStream(memoryStream);
                     _synthesizer.Speak(text);
                     _synthesizer.SetOutputToDefaultAudioDevice();
@@ -157,16 +171,22 @@ public class WindowsTtsService : ITtsService
                     }
 
                     memoryStream.Position = 0;
-
-                    // Play with NAudio and panning (stream is disposed inside PlayWithPan)
-                    PlayWithPan(memoryStream, pan);
                 }
                 catch (Exception ex)
                 {
                     Logger.Error("TTS speak with pan error", ex);
+                    memoryStream?.Dispose();
                     // Reset synthesizer output in case of error
                     try { _synthesizer.SetOutputToDefaultAudioDevice(); } catch { }
+                    return;
                 }
+            }
+
+            // Play audio with panning (outside _speakLock so Stop() can interrupt quickly)
+            // Stream is disposed inside PlayWithPan
+            if (memoryStream != null)
+            {
+                PlayWithPan(memoryStream, pan);
             }
         });
     }
@@ -178,20 +198,30 @@ public class WindowsTtsService : ITtsService
     private void PlayWithPan(MemoryStream wavStream, float pan)
     {
         WaveFileReader? reader = null;
+        WaveOutEvent? localWaveOut = null;
 
-        lock (_audioLock)
+        try
         {
-            // Dispose previous playback
-            if (_waveOut != null)
+            // Setup phase: acquire lock, setup player, start playback
+            lock (_audioLock)
             {
-                _waveOut.PlaybackStopped -= OnNAudioPlaybackStopped;
-                _waveOut.Stop();
-                _waveOut.Dispose();
-                _waveOut = null;
-            }
+                // Check if stop was already requested
+                if (_stopRequested)
+                {
+                    Logger.Log("PlayWithPan: Stop requested, aborting playback setup");
+                    wavStream.Dispose();
+                    return;
+                }
 
-            try
-            {
+                // Dispose previous playback
+                if (_waveOut != null)
+                {
+                    _waveOut.PlaybackStopped -= OnNAudioPlaybackStopped;
+                    _waveOut.Stop();
+                    _waveOut.Dispose();
+                    _waveOut = null;
+                }
+
                 reader = new WaveFileReader(wavStream);
                 Logger.Log($"PlayWithPan: WAV format - {reader.WaveFormat.SampleRate}Hz, {reader.WaveFormat.Channels}ch, {reader.WaveFormat.BitsPerSample}bit");
 
@@ -226,35 +256,37 @@ public class WindowsTtsService : ITtsService
 
                 Logger.Log($"PlayWithPan: Volume set to {_currentVolume / 100f:F2}");
 
-                _waveOut = new WaveOutEvent();
-                _waveOut.Init(volumeSample);
-                _waveOut.PlaybackStopped += OnNAudioPlaybackStopped;
+                localWaveOut = new WaveOutEvent();
+                localWaveOut.Init(volumeSample);
+                localWaveOut.PlaybackStopped += OnNAudioPlaybackStopped;
+                _waveOut = localWaveOut;
 
                 IsSpeaking = true;
                 SpeechStarted?.Invoke(this, EventArgs.Empty);
 
                 Logger.Log("PlayWithPan: Starting playback");
-                _waveOut.Play();
+                localWaveOut.Play();
+            }
 
-                // Wait for playback to complete (synchronous in this Task.Run context)
-                while (_waveOut != null && _waveOut.PlaybackState == PlaybackState.Playing)
-                {
-                    Thread.Sleep(10);
-                }
+            // Wait phase: outside lock so Stop() can interrupt immediately
+            // Check both playback state and stop flag
+            while (localWaveOut.PlaybackState == PlaybackState.Playing && !_stopRequested)
+            {
+                Thread.Sleep(10);
+            }
 
-                Logger.Log("PlayWithPan: Playback complete");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("NAudio playback error", ex);
-                IsSpeaking = false;
-            }
-            finally
-            {
-                // Clean up reader and stream
-                reader?.Dispose();
-                wavStream.Dispose();
-            }
+            Logger.Log("PlayWithPan: Playback complete");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("NAudio playback error", ex);
+            IsSpeaking = false;
+        }
+        finally
+        {
+            // Clean up reader and stream
+            reader?.Dispose();
+            wavStream.Dispose();
         }
     }
 
@@ -284,24 +316,10 @@ public class WindowsTtsService : ITtsService
     /// </summary>
     public void Stop()
     {
-        // Stop SAPI speech
-        if (_synthesizer != null)
-        {
-            lock (_speakLock)
-            {
-                try
-                {
-                    Logger.Log("TTS Stop: Cancelling all SAPI speech");
-                    _synthesizer.SpeakAsyncCancelAll();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error("TTS SAPI stop error", ex);
-                }
-            }
-        }
+        // Set stop flag first (volatile, no lock needed) so playback loop can exit
+        _stopRequested = true;
 
-        // Stop NAudio playback
+        // Stop NAudio playback first (quick, allows playback loop to exit)
         lock (_audioLock)
         {
             try
@@ -315,6 +333,23 @@ public class WindowsTtsService : ITtsService
             catch (Exception ex)
             {
                 Logger.Error("TTS NAudio stop error", ex);
+            }
+        }
+
+        // Stop SAPI speech (may block briefly if rendering is in progress)
+        if (_synthesizer != null)
+        {
+            lock (_speakLock)
+            {
+                try
+                {
+                    Logger.Log("TTS Stop: Cancelling all SAPI speech");
+                    _synthesizer.SpeakAsyncCancelAll();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("TTS SAPI stop error", ex);
+                }
             }
         }
 

@@ -18,12 +18,12 @@
     "inv-info"
   ],
   "hotkeys": {
-    "readPrimary": "Alt+1",
-    "readSecondary": "Alt+2",
-    "readTertiary": "Alt+3",
-    "stopReading": "Alt+4",
-    "toggleDetection": "Alt+5",
-    "quit": "Alt+Q"
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
+    "quit": "Alt\u002BQ"
   },
   "capture": {
     "method": "fullscreen",
@@ -40,6 +40,9 @@
     "secondaryRate": 6,
     "tertiaryVoice": "Microsoft David Desktop",
     "tertiaryRate": 6,
+    "primaryDirectionalAudio": true,
+    "secondaryDirectionalAudio": false,
+    "tertiaryDirectionalAudio": true,
     "volume": 84
   },
   "detection": {
