@@ -59,6 +59,10 @@
               "target": "Package",
               "version": "[1.16.3, )"
             },
+            "NAudio": {
+              "target": "Package",
+              "version": "[2.2.1, )"
+            },
             "System.Drawing.Common": {
               "target": "Package",
               "version": "[8.0.0, )"

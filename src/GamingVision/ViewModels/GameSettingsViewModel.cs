@@ -86,6 +86,15 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private int _volume = 100;
 
+    [ObservableProperty]
+    private bool _primaryDirectionalAudio;
+
+    [ObservableProperty]
+    private bool _secondaryDirectionalAudio;
+
+    [ObservableProperty]
+    private bool _tertiaryDirectionalAudio;
+
     // Hotkey settings
     [ObservableProperty]
     private string _hotkeyReadPrimary = "Alt+1";
@@ -254,6 +263,9 @@ public partial class GameSettingsViewModel : ObservableObject
         TertiaryVoice = _currentProfile.Tts.TertiaryVoice;
         TertiaryRate = _currentProfile.Tts.TertiaryRate;
         Volume = _currentProfile.Tts.Volume;
+        PrimaryDirectionalAudio = _currentProfile.Tts.PrimaryDirectionalAudio;
+        SecondaryDirectionalAudio = _currentProfile.Tts.SecondaryDirectionalAudio;
+        TertiaryDirectionalAudio = _currentProfile.Tts.TertiaryDirectionalAudio;
 
         // Hotkeys
         HotkeyReadPrimary = _currentProfile.Hotkeys.ReadPrimary;
@@ -304,6 +316,9 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Tts.TertiaryVoice = TertiaryVoice;
         _currentProfile.Tts.TertiaryRate = TertiaryRate;
         _currentProfile.Tts.Volume = Volume;
+        _currentProfile.Tts.PrimaryDirectionalAudio = PrimaryDirectionalAudio;
+        _currentProfile.Tts.SecondaryDirectionalAudio = SecondaryDirectionalAudio;
+        _currentProfile.Tts.TertiaryDirectionalAudio = TertiaryDirectionalAudio;
 
         // Hotkeys
         _currentProfile.Hotkeys.ReadPrimary = HotkeyReadPrimary;

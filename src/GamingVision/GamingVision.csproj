@@ -35,6 +35,9 @@
     <!-- System.Drawing for image processing -->
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
 
+    <!-- NAudio for audio panning/spatial audio -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+
     <!-- WMI for GPU detection -->
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>

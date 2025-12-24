@@ -181,6 +181,9 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Engine:" VerticalAlignment="Center" Margin="0,8"/>
@@ -206,36 +209,54 @@
                             <TextBlock Text="{Binding PrimaryRate}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Secondary Voice:" VerticalAlignment="Center" Margin="0,8"/>
-                        <ComboBox Grid.Row="3" Grid.Column="1" Margin="15,5"
+                        <CheckBox Grid.Row="3" Grid.Column="1" Margin="15,5"
+                                  Content="Directional Audio"
+                                  IsChecked="{Binding PrimaryDirectionalAudio}"
+                                  AutomationProperties.Name="Primary Directional Audio"
+                                  AutomationProperties.HelpText="Pan audio left/right based on object screen position"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Voice:" VerticalAlignment="Center" Margin="0,8"/>
+                        <ComboBox Grid.Row="4" Grid.Column="1" Margin="15,5"
                                   ItemsSource="{Binding AvailableVoices}"
                                   SelectedValue="{Binding SecondaryVoice}"
                                   AutomationProperties.Name="Secondary Voice Selection"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Speed:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Secondary Speed:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="-10" Maximum="10" Value="{Binding SecondaryRate}"
                                     TickFrequency="1" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Secondary Speech Rate"/>
                             <TextBlock Text="{Binding SecondaryRate}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Tertiary Voice:" VerticalAlignment="Center" Margin="0,8"/>
-                        <ComboBox Grid.Row="5" Grid.Column="1" Margin="15,5"
+                        <CheckBox Grid.Row="6" Grid.Column="1" Margin="15,5"
+                                  Content="Directional Audio"
+                                  IsChecked="{Binding SecondaryDirectionalAudio}"
+                                  AutomationProperties.Name="Secondary Directional Audio"
+                                  AutomationProperties.HelpText="Pan audio left/right based on object screen position"/>
+
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Tertiary Voice:" VerticalAlignment="Center" Margin="0,8"/>
+                        <ComboBox Grid.Row="7" Grid.Column="1" Margin="15,5"
                                   ItemsSource="{Binding AvailableVoices}"
                                   SelectedValue="{Binding TertiaryVoice}"
                                   AutomationProperties.Name="Tertiary Voice Selection"/>
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Tertiary Speed:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Tertiary Speed:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="-10" Maximum="10" Value="{Binding TertiaryRate}"
                                     TickFrequency="1" IsSnapToTickEnabled="True"
                                     AutomationProperties.Name="Tertiary Speech Rate"/>
                             <TextBlock Text="{Binding TertiaryRate}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Volume:" VerticalAlignment="Center" Margin="0,8"/>
-                        <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
+                        <CheckBox Grid.Row="9" Grid.Column="1" Margin="15,5"
+                                  Content="Directional Audio"
+                                  IsChecked="{Binding TertiaryDirectionalAudio}"
+                                  AutomationProperties.Name="Tertiary Directional Audio"
+                                  AutomationProperties.HelpText="Pan audio left/right based on object screen position"/>
+
+                        <TextBlock Grid.Row="10" Grid.Column="0" Text="Volume:" VerticalAlignment="Center" Margin="0,8"/>
+                        <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     AutomationProperties.Name="Volume"/>
                             <TextBlock Text="{Binding Volume, StringFormat={}{0}%}" Margin="15,0,0,0" Width="50" VerticalAlignment="Center"/>

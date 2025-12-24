@@ -29,6 +29,14 @@ public interface ITtsService : IDisposable
     Task SpeakAsync(string text, bool interrupt = false);
 
     /// <summary>
+    /// Speaks the given text with stereo panning for directional audio.
+    /// </summary>
+    /// <param name="text">The text to speak.</param>
+    /// <param name="pan">Pan value from -1.0 (full left) to 1.0 (full right), 0.0 is center.</param>
+    /// <param name="interrupt">If true, interrupts any current speech.</param>
+    Task SpeakWithPanAsync(string text, float pan, bool interrupt = false);
+
+    /// <summary>
     /// Queues text to be spoken after current speech completes.
     /// </summary>
     /// <param name="text">The text to queue.</param>

@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Speech.Synthesis;
 using GamingVision.Utilities;
+using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace GamingVision.Services.Tts;
 
@@ -14,9 +17,12 @@ public class WindowsTtsService : ITtsService
     private SpeechSynthesizer? _synthesizer;
     private readonly ConcurrentQueue<string> _speechQueue = new();
     private readonly object _speakLock = new();
+    private readonly object _audioLock = new();
     private bool _isProcessingQueue;
     private bool _disposed;
     private List<VoiceInfo> _availableVoices = [];
+    private WaveOutEvent? _waveOut;
+    private int _currentVolume = 100;
 
     public bool IsReady => _synthesizer != null;
     public bool IsSpeaking { get; private set; }
@@ -107,6 +113,161 @@ public class WindowsTtsService : ITtsService
     }
 
     /// <summary>
+    /// Speaks the given text with stereo panning for directional audio.
+    /// Uses NAudio to render SAPI output to a stream, apply panning, and play.
+    /// </summary>
+    public async Task SpeakWithPanAsync(string text, float pan, bool interrupt = false)
+    {
+        if (_synthesizer == null || string.IsNullOrWhiteSpace(text))
+        {
+            Logger.Warn($"SpeakWithPanAsync: Skipped - synthesizer null or empty text");
+            return;
+        }
+
+        // Clamp pan to valid range
+        pan = Math.Clamp(pan, -1.0f, 1.0f);
+
+        Logger.Log($"SpeakWithPanAsync: Speaking '{text.Substring(0, Math.Min(50, text.Length))}' (pan: {pan:F2}, interrupt: {interrupt})");
+
+        if (interrupt)
+        {
+            Logger.Log("SpeakWithPanAsync: Interrupting current speech");
+            Stop();
+        }
+
+        await Task.Run(() =>
+        {
+            lock (_speakLock)
+            {
+                try
+                {
+                    // Render speech to WAV in memory
+                    var memoryStream = new MemoryStream();
+                    _synthesizer.SetOutputToWaveStream(memoryStream);
+                    _synthesizer.Speak(text);
+                    _synthesizer.SetOutputToDefaultAudioDevice();
+
+                    Logger.Log($"SpeakWithPanAsync: SAPI rendered {memoryStream.Length} bytes to stream");
+
+                    if (memoryStream.Length == 0)
+                    {
+                        Logger.Warn("SpeakWithPanAsync: SAPI produced no audio data");
+                        memoryStream.Dispose();
+                        return;
+                    }
+
+                    memoryStream.Position = 0;
+
+                    // Play with NAudio and panning (stream is disposed inside PlayWithPan)
+                    PlayWithPan(memoryStream, pan);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("TTS speak with pan error", ex);
+                    // Reset synthesizer output in case of error
+                    try { _synthesizer.SetOutputToDefaultAudioDevice(); } catch { }
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Plays WAV audio from a stream with stereo panning applied.
+    /// Takes ownership of the stream and disposes it when done.
+    /// </summary>
+    private void PlayWithPan(MemoryStream wavStream, float pan)
+    {
+        WaveFileReader? reader = null;
+
+        lock (_audioLock)
+        {
+            // Dispose previous playback
+            if (_waveOut != null)
+            {
+                _waveOut.PlaybackStopped -= OnNAudioPlaybackStopped;
+                _waveOut.Stop();
+                _waveOut.Dispose();
+                _waveOut = null;
+            }
+
+            try
+            {
+                reader = new WaveFileReader(wavStream);
+                Logger.Log($"PlayWithPan: WAV format - {reader.WaveFormat.SampleRate}Hz, {reader.WaveFormat.Channels}ch, {reader.WaveFormat.BitsPerSample}bit");
+
+                var sampleProvider = reader.ToSampleProvider();
+
+                // Build the sample provider chain based on input channels
+                ISampleProvider outputProvider;
+
+                if (sampleProvider.WaveFormat.Channels == 1)
+                {
+                    // Mono input: PanningSampleProvider takes mono and outputs stereo with panning
+                    var panningSample = new PanningSampleProvider(sampleProvider)
+                    {
+                        Pan = pan
+                    };
+                    outputProvider = panningSample;
+                    Logger.Log($"PlayWithPan: Applied panning to mono source (pan={pan:F2})");
+                }
+                else
+                {
+                    // Stereo input: Can't use PanningSampleProvider, just pass through
+                    // (This shouldn't happen with SAPI which outputs mono)
+                    outputProvider = sampleProvider;
+                    Logger.Log("PlayWithPan: Stereo source, panning not applied");
+                }
+
+                // Apply volume (convert 0-100 to 0.0-1.0)
+                var volumeSample = new VolumeSampleProvider(outputProvider)
+                {
+                    Volume = _currentVolume / 100f
+                };
+
+                Logger.Log($"PlayWithPan: Volume set to {_currentVolume / 100f:F2}");
+
+                _waveOut = new WaveOutEvent();
+                _waveOut.Init(volumeSample);
+                _waveOut.PlaybackStopped += OnNAudioPlaybackStopped;
+
+                IsSpeaking = true;
+                SpeechStarted?.Invoke(this, EventArgs.Empty);
+
+                Logger.Log("PlayWithPan: Starting playback");
+                _waveOut.Play();
+
+                // Wait for playback to complete (synchronous in this Task.Run context)
+                while (_waveOut != null && _waveOut.PlaybackState == PlaybackState.Playing)
+                {
+                    Thread.Sleep(10);
+                }
+
+                Logger.Log("PlayWithPan: Playback complete");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("NAudio playback error", ex);
+                IsSpeaking = false;
+            }
+            finally
+            {
+                // Clean up reader and stream
+                reader?.Dispose();
+                wavStream.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles NAudio playback stopped event.
+    /// </summary>
+    private void OnNAudioPlaybackStopped(object? sender, StoppedEventArgs e)
+    {
+        IsSpeaking = false;
+        SpeechCompleted?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
     /// Queues text to be spoken after current speech completes.
     /// </summary>
     public void QueueSpeech(string text)
@@ -119,26 +280,45 @@ public class WindowsTtsService : ITtsService
     }
 
     /// <summary>
-    /// Stops any current speech.
+    /// Stops any current speech (both SAPI and NAudio).
     /// </summary>
     public void Stop()
     {
-        if (_synthesizer == null)
-            return;
+        // Stop SAPI speech
+        if (_synthesizer != null)
+        {
+            lock (_speakLock)
+            {
+                try
+                {
+                    Logger.Log("TTS Stop: Cancelling all SAPI speech");
+                    _synthesizer.SpeakAsyncCancelAll();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("TTS SAPI stop error", ex);
+                }
+            }
+        }
 
-        lock (_speakLock)
+        // Stop NAudio playback
+        lock (_audioLock)
         {
             try
             {
-                Logger.Log("TTS Stop: Cancelling all speech");
-                _synthesizer.SpeakAsyncCancelAll();
-                Logger.Log("TTS Stop: Cancelled");
+                if (_waveOut != null)
+                {
+                    Logger.Log("TTS Stop: Stopping NAudio playback");
+                    _waveOut.Stop();
+                }
             }
             catch (Exception ex)
             {
-                Logger.Error("TTS stop error", ex);
+                Logger.Error("TTS NAudio stop error", ex);
             }
         }
+
+        Logger.Log("TTS Stop: Cancelled");
     }
 
     /// <summary>
@@ -172,6 +352,7 @@ public class WindowsTtsService : ITtsService
 
         // Clamp to valid range
         volume = Math.Max(0, Math.Min(100, volume));
+        _currentVolume = volume;
         _synthesizer.Volume = volume;
     }
 
@@ -282,6 +463,18 @@ public class WindowsTtsService : ITtsService
         ClearQueue();
         Stop();
 
+        // Dispose NAudio resources
+        lock (_audioLock)
+        {
+            if (_waveOut != null)
+            {
+                _waveOut.PlaybackStopped -= OnNAudioPlaybackStopped;
+                _waveOut.Dispose();
+                _waveOut = null;
+            }
+        }
+
+        // Dispose SAPI resources
         if (_synthesizer != null)
         {
             _synthesizer.SpeakStarted -= OnSpeakStarted;

@@ -226,21 +226,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (frame == null)
         {
             Logger.Warn("ReadPrimaryObjectsAsync: Frame is null, speaking label only");
-            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, detection, 0, interrupt: true);
             return;
         }
 
         if (frame.IsDisposed)
         {
             Logger.Warn("ReadPrimaryObjectsAsync: Frame is disposed, speaking label only");
-            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, detection, 0, interrupt: true);
             return;
         }
 
         if (_ocrService == null || !_ocrService.IsReady)
         {
             Logger.Warn($"ReadPrimaryObjectsAsync: OCR not ready (null: {_ocrService == null}), speaking label only");
-            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, interrupt: true);
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Primary, detection, frame.Width, interrupt: true);
             return;
         }
 
@@ -266,7 +266,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Logger.Log($"ReadPrimaryObjectsAsync: OCR found text, speechText = '{speechText}'");
 
             Logger.Log($"ReadPrimaryObjectsAsync: Speaking '{speechText}'");
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: true);
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
@@ -317,7 +317,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Secondary, interrupt: true);
+            int screenWidth = frame?.Width ?? 0;
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Secondary, detection, screenWidth, interrupt: true);
             return;
         }
 
@@ -334,7 +335,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             displayText = $"{detection.Label}: {text}";
             speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
 
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Secondary, interrupt: true);
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Secondary, detection, frame.Width, interrupt: true);
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
@@ -384,7 +385,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
         {
-            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Tertiary, interrupt: true);
+            int screenWidth = frame?.Width ?? 0;
+            await SpeakWithVoiceAsync(detection.Label, SpeechTier.Tertiary, detection, screenWidth, interrupt: true);
             return;
         }
 
@@ -401,7 +403,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             displayText = $"{detection.Label}: {text}";
             speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
 
-            await SpeakWithVoiceAsync(speechText, SpeechTier.Tertiary, interrupt: true);
+            await SpeakWithVoiceAsync(speechText, SpeechTier.Tertiary, detection, frame.Width, interrupt: true);
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
@@ -416,9 +418,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Sets the TTS voice and rate for the specified tier, then speaks.
+    /// Sets the TTS voice and rate for the specified tier, then speaks with optional directional audio.
     /// </summary>
-    private async Task SpeakWithVoiceAsync(string text, SpeechTier tier, bool interrupt = false)
+    /// <param name="text">The text to speak.</param>
+    /// <param name="tier">The speech tier (Primary, Secondary, Tertiary).</param>
+    /// <param name="detection">Optional detection for calculating pan position.</param>
+    /// <param name="screenWidth">Screen width for pan calculation (required if detection is provided).</param>
+    /// <param name="interrupt">If true, interrupts any current speech.</param>
+    private async Task SpeakWithVoiceAsync(
+        string text,
+        SpeechTier tier,
+        DetectedObject? detection = null,
+        int screenWidth = 0,
+        bool interrupt = false)
     {
         try
         {
@@ -429,24 +441,41 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (profile == null)
                 return;
 
-            // Set voice and rate based on tier
+            // Set voice and rate based on tier, and check if directional audio is enabled
+            bool useDirectionalAudio = false;
             switch (tier)
             {
                 case SpeechTier.Primary:
                     _ttsService.SetVoice(profile.Tts.PrimaryVoice ?? "");
                     _ttsService.SetRate(profile.Tts.PrimaryRate);
+                    useDirectionalAudio = profile.Tts.PrimaryDirectionalAudio;
                     break;
                 case SpeechTier.Secondary:
                     _ttsService.SetVoice(profile.Tts.SecondaryVoice ?? "");
                     _ttsService.SetRate(profile.Tts.SecondaryRate);
+                    useDirectionalAudio = profile.Tts.SecondaryDirectionalAudio;
                     break;
                 case SpeechTier.Tertiary:
                     _ttsService.SetVoice(profile.Tts.TertiaryVoice ?? "");
                     _ttsService.SetRate(profile.Tts.TertiaryRate);
+                    useDirectionalAudio = profile.Tts.TertiaryDirectionalAudio;
                     break;
             }
 
-            await _ttsService.SpeakAsync(text, interrupt);
+            // Calculate pan value based on detection position
+            float pan = 0.0f;
+            if (useDirectionalAudio && detection != null && screenWidth > 0)
+            {
+                // Use bounding box center for pan calculation
+                // Formula: (centerX / screenWidth) * 2 - 1
+                // Results: left edge = -1, center = 0, right edge = +1
+                pan = (detection.CenterX / screenWidth) * 2f - 1f;
+                pan = Math.Clamp(pan, -1.0f, 1.0f);
+                Logger.Log($"Directional audio: CenterX={detection.CenterX:F0}, Width={screenWidth}, Pan={pan:F2}");
+            }
+
+            // Always use panned speech (pan=0 for center when directional disabled)
+            await _ttsService.SpeakWithPanAsync(text, pan, interrupt);
         }
         catch (Exception ex)
         {
@@ -804,7 +833,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     // Start tracking the label being read so we can cancel if user moves away
                     _detectionManager?.StartTrackingLabel(detection.Label, detection);
 
-                    await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, interrupt: true);
+                    await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: true);
 
                     // Stop tracking after speech completes (if not already stopped due to disappearance)
                     _detectionManager?.StopTrackingLabel(detection.Label);

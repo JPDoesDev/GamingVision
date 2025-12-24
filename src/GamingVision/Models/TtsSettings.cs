@@ -41,6 +41,24 @@ public class TtsSettings
     public int TertiaryRate { get; set; } = 0;
 
     /// <summary>
+    /// Enable directional audio panning for primary objects.
+    /// When enabled, audio pans left/right based on object screen position.
+    /// </summary>
+    public bool PrimaryDirectionalAudio { get; set; } = false;
+
+    /// <summary>
+    /// Enable directional audio panning for secondary objects.
+    /// When enabled, audio pans left/right based on object screen position.
+    /// </summary>
+    public bool SecondaryDirectionalAudio { get; set; } = false;
+
+    /// <summary>
+    /// Enable directional audio panning for tertiary objects.
+    /// When enabled, audio pans left/right based on object screen position.
+    /// </summary>
+    public bool TertiaryDirectionalAudio { get; set; } = false;
+
+    /// <summary>
     /// Volume level (0-100).
     /// </summary>
     public int Volume { get; set; } = 100;
@@ -57,6 +75,9 @@ public class TtsSettings
         SecondaryRate = SecondaryRate,
         TertiaryVoice = TertiaryVoice,
         TertiaryRate = TertiaryRate,
+        PrimaryDirectionalAudio = PrimaryDirectionalAudio,
+        SecondaryDirectionalAudio = SecondaryDirectionalAudio,
+        TertiaryDirectionalAudio = TertiaryDirectionalAudio,
         Volume = Volume
     };
 }

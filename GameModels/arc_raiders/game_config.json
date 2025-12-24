@@ -1,7 +1,7 @@
 {
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251220_214214.onnx",
+  "modelFile": "ArcRaidersModel_v20251222_203924.onnx",
   "windowTitle": "ARC Raiders",
   "primaryLabels": [
     "inv-title",
@@ -18,12 +18,12 @@
     "inv-info"
   ],
   "hotkeys": {
-    "readPrimary": "Alt\u002B1",
-    "readSecondary": "Alt\u002B2",
-    "readTertiary": "Alt\u002B3",
-    "stopReading": "Alt\u002B4",
-    "toggleDetection": "Alt\u002B5",
-    "quit": "Alt\u002BQ"
+    "readPrimary": "Alt+1",
+    "readSecondary": "Alt+2",
+    "readTertiary": "Alt+3",
+    "stopReading": "Alt+4",
+    "toggleDetection": "Alt+5",
+    "quit": "Alt+Q"
   },
   "capture": {
     "method": "fullscreen",
