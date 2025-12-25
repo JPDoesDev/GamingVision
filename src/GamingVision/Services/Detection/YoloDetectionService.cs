@@ -195,6 +195,8 @@ public class YoloDetectionService : IDetectionService
 
         try
         {
+            var totalSw = Stopwatch.StartNew();
+
             // Reuse frame buffer if large enough, otherwise allocate (handles resolution changes)
             var frameSize = frame.Data.Length;
             if (_frameBuffer == null || _frameBuffer.Length < frameSize)
@@ -203,7 +205,10 @@ public class YoloDetectionService : IDetectionService
             }
 
             // Copy frame data to reusable buffer
+            var copySw = Stopwatch.StartNew();
             Buffer.BlockCopy(frame.Data, 0, _frameBuffer, 0, frameSize);
+            var copyMs = copySw.ElapsedMilliseconds;
+
             var frameWidth = frame.Width;
             var frameHeight = frame.Height;
             var frameStride = frame.Stride;
@@ -212,22 +217,26 @@ public class YoloDetectionService : IDetectionService
             var tensorBuffer = _tensorBuffer!;
             var inputsArray = _inputsArray!;
             var frameBuffer = _frameBuffer;
+            var inputWidth = _inputWidth;
+            var inputHeight = _inputHeight;
 
             return await Task.Run(() =>
             {
                 try
                 {
-                    Logger.Log($"DetectAsync: Starting inference on {frameWidth}x{frameHeight} frame");
+                    var sw = Stopwatch.StartNew();
 
                     // Preprocess: Convert BGRA to RGB and resize to model input size (uses reusable buffer)
                     var inputTensor = PreprocessFrameDataReusable(frameBuffer, frameWidth, frameHeight, frameStride, tensorBuffer);
+                    var preprocessMs = sw.ElapsedMilliseconds;
+                    sw.Restart();
 
                     // Run inference using reusable inputs array
-                    Logger.Log("DetectAsync: Running ONNX inference");
                     inputsArray[0] = NamedOnnxValue.CreateFromTensor(_inputName, inputTensor);
-
                     using var results = session.Run(inputsArray);
-                    Logger.Log("DetectAsync: Inference complete, processing output");
+                    var inferenceMs = sw.ElapsedMilliseconds;
+                    sw.Restart();
+
                     var outputTensor = results.First().AsTensor<float>();
 
                     // Post-process: Extract detections from YOLO output
@@ -239,12 +248,13 @@ public class YoloDetectionService : IDetectionService
 
                     // Apply NMS
                     var finalDetections = ApplyNms(detections, 0.45f);
-                    Logger.Log($"DetectAsync: Found {finalDetections.Count} detections");
-                    if (finalDetections.Count > 0)
-                    {
-                        var labels = string.Join(", ", finalDetections.Select(d => $"{d.Label}({d.Confidence:F2})"));
-                        Logger.Log($"DetectAsync: Detections = [{labels}]");
-                    }
+                    var postprocessMs = sw.ElapsedMilliseconds;
+
+                    var totalMs = totalSw.ElapsedMilliseconds;
+
+                    // Log performance metrics
+                    Logger.Log($"[PERF] Detection: copy={copyMs}ms, preprocess={preprocessMs}ms, inference={inferenceMs}ms, postprocess={postprocessMs}ms, TOTAL={totalMs}ms | model={inputWidth}x{inputHeight}, detections={finalDetections.Count}");
+
                     return finalDetections;
                 }
                 catch (Exception ex)

@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using GamingVision.Models;
+using GamingVision.Utilities;
 
 namespace GamingVision.Rendering;
 
@@ -80,12 +82,19 @@ public class OverlayRenderer
     /// </summary>
     public void DrawAll(IEnumerable<(DetectedObject detection, OverlayGroup group)> items)
     {
+        var sw = Stopwatch.StartNew();
+        int count = 0;
+
         using var dc = _drawingVisual.RenderOpen();
 
         foreach (var (det, group) in items)
         {
             DrawBoxInternal(dc, det.X1, det.Y1, det.Width, det.Height, det.Label, group);
+            count++;
         }
+
+        var renderMs = sw.ElapsedMilliseconds;
+        Logger.Log($"[PERF] Render: draw={renderMs}ms | boxes={count}");
     }
 
     /// <summary>

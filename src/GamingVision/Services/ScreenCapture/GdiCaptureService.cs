@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -184,10 +185,16 @@ public class GdiCaptureService : IScreenCaptureService
     {
         try
         {
+            var sw = Stopwatch.StartNew();
+
             using var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
             using var graphics = Graphics.FromImage(bitmap);
+            var allocMs = sw.ElapsedMilliseconds;
+            sw.Restart();
 
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+            var captureMs = sw.ElapsedMilliseconds;
+            sw.Restart();
 
             // Convert bitmap to byte array
             var bitmapData = bitmap.LockBits(
@@ -202,6 +209,10 @@ public class GdiCaptureService : IScreenCaptureService
                 var data = new byte[size];
 
                 Marshal.Copy(bitmapData.Scan0, data, 0, size);
+                var copyMs = sw.ElapsedMilliseconds;
+
+                var totalMs = allocMs + captureMs + copyMs;
+                Logger.Log($"[PERF] Capture: alloc={allocMs}ms, bitblt={captureMs}ms, copy={copyMs}ms, TOTAL={totalMs}ms | {bounds.Width}x{bounds.Height}");
 
                 return new CapturedFrame
                 {
@@ -219,7 +230,7 @@ public class GdiCaptureService : IScreenCaptureService
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error capturing region: {ex.Message}");
+            Debug.WriteLine($"Error capturing region: {ex.Message}");
             return null;
         }
     }
