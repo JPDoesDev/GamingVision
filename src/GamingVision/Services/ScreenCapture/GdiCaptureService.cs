@@ -106,6 +106,9 @@ public class GdiCaptureService : IScreenCaptureService
         {
             try
             {
+                // Start timing for next capture immediately (don't wait for handlers)
+                var delayTask = Task.Delay(_captureIntervalMs, cancellationToken);
+
                 var frame = CaptureFrame();
                 if (frame != null)
                 {
@@ -115,10 +118,27 @@ public class GdiCaptureService : IScreenCaptureService
                         _latestFrame = frame;
                     }
 
-                    FrameCaptured?.Invoke(this, frame);
+                    // Fire-and-forget: Don't block capture loop waiting for event handlers
+                    // This allows capture to continue at target FPS regardless of inference time
+                    var handler = FrameCaptured;
+                    if (handler != null)
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            try
+                            {
+                                handler.Invoke(this, frame);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Frame handler error: {ex.Message}");
+                            }
+                        });
+                    }
                 }
 
-                await Task.Delay(_captureIntervalMs, cancellationToken);
+                // Wait for remaining time in the interval
+                await delayTask;
             }
             catch (OperationCanceledException)
             {

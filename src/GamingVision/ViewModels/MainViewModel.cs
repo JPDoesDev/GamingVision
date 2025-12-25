@@ -749,8 +749,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var frameWidth = e.Width;
             var frameHeight = e.Height;
 
-            // Log every 30 frames to avoid spam
-            if (_frameCount % 30 == 1)
+            // Log every 100 frames to reduce spam at higher FPS
+            if (_frameCount % 100 == 1)
             {
                 Logger.Log($"OnFrameCaptured: Frame {_frameCount}, {frameWidth}x{frameHeight}, disposed={e.IsDisposed}");
             }
@@ -761,8 +761,63 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _latestFrame = e;
             }
 
-            // Run detection on this frame
-            if (_detectionManager != null && _detectionManager.DetectionService.IsReady)
+            var detectionService = _detectionManager?.DetectionService;
+            if (detectionService == null || !detectionService.IsReady)
+            {
+                if (_frameCount % 100 == 1)
+                {
+                    Logger.Warn($"OnFrameCaptured: Detection not ready");
+                }
+                return;
+            }
+
+            // Determine which paths need to run
+            bool overlayNeedsUpdate = IsOverlayRunning && _overlayRenderer != null && _overlayVisible;
+            bool screenReaderNeedsUpdate = IsScreenReaderEnabled;
+
+            // Fast path: Run detection once, use results for both overlay and screen reader
+            if (overlayNeedsUpdate)
+            {
+                try
+                {
+                    // Use low threshold for overlay (per-group filtering happens in render)
+                    var detections = await detectionService.DetectAsync(e, 0.1f);
+
+                    if (detections != null)
+                    {
+                        // Successful inference - render immediately
+                        _detectionCount = detections.Count;
+
+                        var detectionsForRender = detections;
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                        {
+                            RenderOverlayDetections(detectionsForRender);
+                        });
+
+                        // If screen reader is also enabled, process for TTS events (on separate task to not block)
+                        if (screenReaderNeedsUpdate && _detectionManager != null)
+                        {
+                            // Fire-and-forget: let DetectionManager process for TTS
+                            _ = _detectionManager.ProcessFrameAsync(e);
+                        }
+                    }
+                    else
+                    {
+                        // Inference was skipped (still processing previous frame)
+                        // Clear the overlay so stale boxes don't persist at wrong positions
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                        {
+                            _overlayRenderer?.Clear();
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Overlay detection error", ex);
+                }
+            }
+            // Screen reader only path (no overlay)
+            else if (screenReaderNeedsUpdate && _detectionManager != null)
             {
                 try
                 {
@@ -774,15 +829,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     Logger.Error("Detection error in frame processing", ex);
                 }
             }
-            else if (_frameCount % 30 == 1)
-            {
-                Logger.Warn($"OnFrameCaptured: Detection not ready (manager null: {_detectionManager == null}, service ready: {_detectionManager?.DetectionService?.IsReady})");
-            }
 
-            // Update UI every 10 frames to avoid excessive updates
-            if (_frameCount % 10 == 0)
+            // Update UI every 30 frames (roughly 1 second at 30 FPS)
+            if (_frameCount % 30 == 0)
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
                     DetectionStatus = $"Running (Frame {_frameCount}, {frameWidth}x{frameHeight})";
                     CurrentDetectionCount = _detectionCount;
@@ -797,17 +848,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnDetectionsReady(object? sender, DetectionEventArgs e)
     {
-        // Update detection count on UI thread
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            CurrentDetectionCount = e.AllDetections.Count;
-
-            // Feed overlay renderer if running
-            if (IsOverlayRunning && _overlayRenderer != null && _overlayVisible)
-            {
-                RenderOverlayDetections(e.AllDetections);
-            }
-        });
+        // Note: Overlay rendering is now handled directly in OnFrameCaptured for better performance.
+        // This event is kept for TTS/Screen Reader functionality which subscribes to PrimaryObjectChanged.
+        // We no longer need to do anything here since detection count is updated in OnFrameCaptured.
     }
 
     private void OnLabelDisappeared(object? sender, LabelDisappearedEventArgs e)
@@ -1116,25 +1159,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Renders overlay detections on the canvas.
+    /// Renders overlay detections on the canvas using batch drawing for performance.
     /// </summary>
     private void RenderOverlayDetections(List<DetectedObject> detections)
     {
         if (_overlayRenderer == null || !_overlayVisible) return;
 
-        _overlayRenderer.Clear();
+        // Build list of (detection, group) pairs for batch rendering
+        var items = new List<(DetectedObject detection, OverlayGroup group)>();
 
         foreach (var group in OverlayGroups)
         {
-            var groupDetections = detections
-                .Where(d => group.Labels.Contains(d.Label))
-                .Where(d => d.Confidence >= group.ConfidenceThreshold);
-
-            foreach (var det in groupDetections)
+            foreach (var det in detections)
             {
-                _overlayRenderer.DrawBox(det.X1, det.Y1, det.Width, det.Height, det.Label, group);
+                if (group.Labels.Contains(det.Label) && det.Confidence >= group.ConfidenceThreshold)
+                {
+                    items.Add((det, group));
+                }
             }
         }
+
+        // Single batch draw call - much faster than individual DrawBox calls
+        _overlayRenderer.DrawAll(items);
     }
 
     [RelayCommand]

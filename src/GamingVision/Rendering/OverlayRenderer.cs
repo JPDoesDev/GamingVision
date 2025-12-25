@@ -1,29 +1,60 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using GamingVision.Models;
 
 namespace GamingVision.Rendering;
 
 /// <summary>
-/// Renders bounding boxes on a WPF Canvas with various visual styles.
+/// High-performance overlay renderer using DrawingVisual for immediate-mode rendering.
+/// Avoids WPF layout system overhead by drawing directly to a visual.
 /// </summary>
 public class OverlayRenderer
 {
     private readonly Canvas _canvas;
+    private readonly DrawingVisual _drawingVisual;
+    private readonly VisualHost _visualHost;
+    private readonly Dictionary<string, SolidColorBrush> _brushCache = new();
+    private readonly Dictionary<string, Pen> _penCache = new();
+    private readonly Typeface _labelTypeface = new("Segoe UI");
 
     public OverlayRenderer(Canvas canvas)
     {
         _canvas = canvas;
+        _drawingVisual = new DrawingVisual();
+        _visualHost = new VisualHost(_drawingVisual);
+        _canvas.Children.Add(_visualHost);
     }
 
     /// <summary>
-    /// Clears all drawn elements from the canvas.
+    /// Clears all drawn elements.
     /// </summary>
     public void Clear()
     {
-        _canvas.Children.Clear();
+        using var dc = _drawingVisual.RenderOpen();
+        // Just close to clear - nothing to draw
+    }
+
+    /// <summary>
+    /// Begins a new drawing batch. Call this before drawing multiple boxes.
+    /// </summary>
+    public DrawingContext BeginDraw()
+    {
+        return _drawingVisual.RenderOpen();
+    }
+
+    /// <summary>
+    /// Draws all detections in a single batch for maximum performance.
+    /// </summary>
+    public void DrawAll(IEnumerable<(DetectedObject detection, OverlayGroup group)> items)
+    {
+        using var dc = _drawingVisual.RenderOpen();
+
+        foreach (var (det, group) in items)
+        {
+            DrawBoxInternal(dc, det.X1, det.Y1, det.Width, det.Height, det.Label, group);
+        }
     }
 
     /// <summary>
@@ -37,120 +68,126 @@ public class OverlayRenderer
     /// <param name="group">Overlay group defining visual style</param>
     public void DrawBox(double x, double y, double width, double height, string label, OverlayGroup group)
     {
-        var color = ParseColor(group.Color);
-        var brush = new SolidColorBrush(color);
+        using var dc = _drawingVisual.RenderOpen();
+        DrawBoxInternal(dc, x, y, width, height, label, group);
+    }
+
+    /// <summary>
+    /// Internal drawing method that uses an existing DrawingContext.
+    /// </summary>
+    private void DrawBoxInternal(DrawingContext dc, double x, double y, double width, double height, string label, OverlayGroup group)
+    {
+        var brush = GetOrCreateBrush(group.Color);
+        var pen = GetOrCreatePen(group.Color, group.Thickness);
+        var rect = new Rect(x, y, width, height);
 
         switch (group.Style.ToLowerInvariant())
         {
             case "highcontrastblack":
-                DrawHighContrastBox(x, y, width, height, brush, group.Thickness, true);
+                DrawHighContrastBox(dc, rect, brush, pen, group.Thickness, true);
                 break;
             case "highcontrastwhite":
-                DrawHighContrastBox(x, y, width, height, brush, group.Thickness, false);
+                DrawHighContrastBox(dc, rect, brush, pen, group.Thickness, false);
                 break;
             default: // "outlined"
-                DrawOutlinedBox(x, y, width, height, brush, group.Thickness);
+                dc.DrawRectangle(null, pen, rect);
                 break;
         }
 
         if (group.ShowLabel && !string.IsNullOrEmpty(label))
         {
-            DrawLabel(x, y, label, brush, group.Style);
+            DrawLabel(dc, x, y, label, brush, group.Style);
         }
     }
 
     /// <summary>
-    /// Draws an outlined box with the specified color.
+    /// Draws a high contrast box with solid fill.
     /// </summary>
-    private void DrawOutlinedBox(double x, double y, double width, double height, SolidColorBrush stroke, int thickness)
+    private void DrawHighContrastBox(DrawingContext dc, Rect rect, SolidColorBrush fillBrush, Pen pen, int thickness, bool blackBorder)
     {
-        var rect = new Rectangle
-        {
-            Width = width,
-            Height = height,
-            Stroke = stroke,
-            StrokeThickness = thickness,
-            Fill = Brushes.Transparent
-        };
+        var borderPen = blackBorder
+            ? GetOrCreatePen("#000000", thickness)
+            : GetOrCreatePen("#FFFFFF", thickness);
 
-        Canvas.SetLeft(rect, x);
-        Canvas.SetTop(rect, y);
-        _canvas.Children.Add(rect);
-    }
-
-    /// <summary>
-    /// Draws a high contrast box with border and solid colored fill.
-    /// </summary>
-    private void DrawHighContrastBox(double x, double y, double width, double height, SolidColorBrush fillBrush, int thickness, bool blackBorder)
-    {
-        var borderBrush = blackBorder ? Brushes.Black : Brushes.White;
-
-        var rect = new Rectangle
-        {
-            Width = width,
-            Height = height,
-            Stroke = borderBrush,
-            StrokeThickness = thickness,
-            Fill = fillBrush
-        };
-        Canvas.SetLeft(rect, x);
-        Canvas.SetTop(rect, y);
-        _canvas.Children.Add(rect);
+        // Draw filled rectangle with border
+        dc.DrawRectangle(fillBrush, borderPen, rect);
     }
 
     /// <summary>
     /// Draws the label text above the bounding box.
     /// </summary>
-    private void DrawLabel(double x, double y, string label, SolidColorBrush color, string style)
+    private void DrawLabel(DrawingContext dc, double x, double y, string label, SolidColorBrush color, string style)
     {
         var styleLower = style.ToLowerInvariant();
         bool isBlackBorder = styleLower == "highcontrastblack";
         bool isWhiteBorder = styleLower == "highcontrastwhite";
 
-        // Background for label
+        // Background color
         var bgColor = isBlackBorder ? Colors.Black
                     : isWhiteBorder ? Colors.White
                     : color.Color;
         bgColor.A = 200;
 
+        // Text color
         var textColor = isBlackBorder ? Colors.White
                       : isWhiteBorder ? Colors.Black
                       : Colors.White;
 
-        var textBlock = new TextBlock
-        {
-            Text = label,
-            Foreground = new SolidColorBrush(textColor),
-            FontSize = 14,
-            FontWeight = FontWeights.Bold,
-            Padding = new Thickness(4, 2, 4, 2)
-        };
+        // Create formatted text
+        var formattedText = new FormattedText(
+            label,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            _labelTypeface,
+            14,
+            new SolidColorBrush(textColor),
+            VisualTreeHelper.GetDpi(_drawingVisual).PixelsPerDip);
 
-        // Measure text size
-        textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var textWidth = textBlock.DesiredSize.Width;
-        var textHeight = textBlock.DesiredSize.Height;
-
-        // Background rectangle
-        var bgRect = new Rectangle
-        {
-            Width = textWidth,
-            Height = textHeight,
-            Fill = new SolidColorBrush(bgColor),
-            RadiusX = 3,
-            RadiusY = 3
-        };
+        var textWidth = formattedText.Width + 8;  // Add padding
+        var textHeight = formattedText.Height + 4;
 
         var labelY = y - textHeight - 2;
         if (labelY < 0) labelY = y + 2; // If above screen, show inside
 
-        Canvas.SetLeft(bgRect, x);
-        Canvas.SetTop(bgRect, labelY);
-        _canvas.Children.Add(bgRect);
+        // Draw background rectangle
+        var bgRect = new Rect(x, labelY, textWidth, textHeight);
+        dc.DrawRoundedRectangle(
+            new SolidColorBrush(bgColor),
+            null,
+            bgRect,
+            3, 3);
 
-        Canvas.SetLeft(textBlock, x);
-        Canvas.SetTop(textBlock, labelY);
-        _canvas.Children.Add(textBlock);
+        // Draw text
+        dc.DrawText(formattedText, new Point(x + 4, labelY + 2));
+    }
+
+    /// <summary>
+    /// Gets or creates a cached brush for the specified color.
+    /// </summary>
+    private SolidColorBrush GetOrCreateBrush(string hex)
+    {
+        if (!_brushCache.TryGetValue(hex, out var brush))
+        {
+            brush = new SolidColorBrush(ParseColor(hex));
+            brush.Freeze(); // Freeze for performance
+            _brushCache[hex] = brush;
+        }
+        return brush;
+    }
+
+    /// <summary>
+    /// Gets or creates a cached pen for the specified color and thickness.
+    /// </summary>
+    private Pen GetOrCreatePen(string hex, int thickness)
+    {
+        var key = $"{hex}_{thickness}";
+        if (!_penCache.TryGetValue(key, out var pen))
+        {
+            pen = new Pen(GetOrCreateBrush(hex), thickness);
+            pen.Freeze(); // Freeze for performance
+            _penCache[key] = pen;
+        }
+        return pen;
     }
 
     /// <summary>
@@ -185,4 +222,22 @@ public class OverlayRenderer
 
         return Colors.Red;
     }
+}
+
+/// <summary>
+/// Helper class to host a DrawingVisual in a WPF visual tree.
+/// Required because DrawingVisual cannot be added directly to Canvas.Children.
+/// </summary>
+public class VisualHost : FrameworkElement
+{
+    private readonly VisualCollection _children;
+
+    public VisualHost(DrawingVisual visual)
+    {
+        _children = new VisualCollection(this) { visual };
+    }
+
+    protected override int VisualChildrenCount => _children.Count;
+
+    protected override Visual GetVisualChild(int index) => _children[index];
 }

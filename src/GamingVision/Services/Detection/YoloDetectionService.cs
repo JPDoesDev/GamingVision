@@ -239,6 +239,7 @@ public class YoloDetectionService : IDetectionService
     /// <summary>
     /// Preprocesses raw frame data for YOLO inference.
     /// Converts BGRA to RGB, resizes, and normalizes to [0, 1].
+    /// Uses parallel processing for performance.
     /// </summary>
     private DenseTensor<float> PreprocessFrameData(byte[] data, int width, int height, int stride)
     {
@@ -248,33 +249,47 @@ public class YoloDetectionService : IDetectionService
         float scaleX = (float)width / _inputWidth;
         float scaleY = (float)height / _inputHeight;
 
-        // Process each pixel in the target tensor
-        for (int y = 0; y < _inputHeight; y++)
+        // Pre-compute the inverse for multiplication instead of division (faster)
+        const float inv255 = 1f / 255f;
+
+        // Get underlying array for use in parallel loop (Span can't be captured in lambdas)
+        var tensorArray = tensor.Buffer.ToArray();
+        int channelSize = _inputHeight * _inputWidth;
+        int inputWidth = _inputWidth;
+        int inputHeight = _inputHeight;
+
+        // Process rows in parallel for significant speedup
+        Parallel.For(0, inputHeight, y =>
         {
-            for (int x = 0; x < _inputWidth; x++)
+            // Pre-calculate source row offset
+            int srcY = Math.Min((int)(y * scaleY), height - 1);
+            int srcRowOffset = srcY * stride;
+            int tensorRowOffset = y * inputWidth;
+
+            for (int x = 0; x < inputWidth; x++)
             {
                 // Map to source coordinates
                 int srcX = Math.Min((int)(x * scaleX), width - 1);
-                int srcY = Math.Min((int)(y * scaleY), height - 1);
 
                 // Calculate source pixel offset (BGRA format)
-                int srcOffset = srcY * stride + srcX * 4;
+                int srcOffset = srcRowOffset + srcX * 4;
 
                 // Bounds check to prevent array index out of range
                 if (srcOffset + 2 >= data.Length)
                     continue;
 
                 // Extract BGR values and convert to RGB, normalize to [0, 1]
-                byte b = data[srcOffset];
-                byte g = data[srcOffset + 1];
-                byte r = data[srcOffset + 2];
-
-                // NCHW format: [batch, channel, height, width]
-                tensor[0, 0, y, x] = r / 255f; // R channel
-                tensor[0, 1, y, x] = g / 255f; // G channel
-                tensor[0, 2, y, x] = b / 255f; // B channel
+                // Write directly to tensor buffer (NCHW layout: R channel, then G, then B)
+                int pixelIndex = tensorRowOffset + x;
+                tensorArray[pixelIndex] = data[srcOffset + 2] * inv255;                    // R channel
+                tensorArray[channelSize + pixelIndex] = data[srcOffset + 1] * inv255;      // G channel
+                tensorArray[2 * channelSize + pixelIndex] = data[srcOffset] * inv255;      // B channel
             }
-        }
+        });
+
+        // Copy array back to tensor
+        var tensorSpan = tensor.Buffer.Span;
+        tensorArray.AsSpan().CopyTo(tensorSpan);
 
         return tensor;
     }

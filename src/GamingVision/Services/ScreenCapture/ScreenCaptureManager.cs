@@ -33,9 +33,9 @@ public class ScreenCaptureManager : IDisposable
         _captureService?.Dispose();
         _captureService = new WindowsCaptureService();
 
-        // Set capture interval based on detection cooldown
-        // Capture at roughly 10 FPS for efficiency
-        _captureService.SetCaptureInterval(100);
+        // Set capture interval for 30 FPS target (33ms between frames)
+        // This enables smooth overlay updates for object tracking
+        _captureService.SetCaptureInterval(33);
 
         if (profile.Capture.Method == "window")
         {
