@@ -105,12 +105,19 @@ TRAINING_CONFIG = {
 # EXPORT SETTINGS
 # =============================================================================
 
+# By default, export_model.py exports TWO models:
+#   - 640x640:  Fast inference (~20-30ms) - good for real-time overlay at 30 FPS
+#   - 1440x1440: High accuracy - better for small UI elements, but slower (~80-100ms)
+#
+# The 640 model is set as default. Users can switch by editing game_config.json.
+# To export only one size: py -3.10 export_model.py --size 640
+
 EXPORT_CONFIG = {
     "format": "onnx",
     "opset": 12,
     "simplify": True,
     "dynamic": False,
-    "imgsz": 1440,  # Should match training imgsz
+    # Note: imgsz is now handled by export_model.py (exports both 640 and 1440)
 }
 
 # =============================================================================
