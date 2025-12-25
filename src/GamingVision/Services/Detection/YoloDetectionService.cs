@@ -24,6 +24,11 @@ public class YoloDetectionService : IDetectionService
     private readonly object _inferenceLock = new();
     private bool _isInferenceRunning;
 
+    // Reusable buffers to avoid per-frame allocations
+    private float[]? _tensorBuffer;
+    private byte[]? _frameBuffer;
+    private NamedOnnxValue[]? _inputsArray;
+
     public bool IsReady => _session != null;
     public IReadOnlyList<string> Labels => _labels;
     public string ExecutionProvider { get; private set; } = "Unknown";
@@ -46,9 +51,17 @@ public class YoloDetectionService : IDetectionService
                     return false;
                 }
 
-                // Create session options
-                var sessionOptions = new SessionOptions();
-                sessionOptions.GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL;
+                // Create session options with performance optimizations
+                var sessionOptions = new SessionOptions
+                {
+                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                    EnableMemoryPattern = true,      // Reuse memory allocations between runs
+                    EnableCpuMemArena = true,        // Use arena allocator for CPU tensors
+                    ExecutionMode = ExecutionMode.ORT_PARALLEL,  // Parallel execution for operators
+                };
+
+                // Set thread count for CPU operations (post-processing)
+                sessionOptions.IntraOpNumThreads = Environment.ProcessorCount;
 
                 // Try GPU first, fall back to CPU
                 if (useGpu)
@@ -97,6 +110,13 @@ public class YoloDetectionService : IDetectionService
                 }
 
                 Debug.WriteLine($"Model loaded: input={_inputName} ({_inputWidth}x{_inputHeight}), output={_outputName}");
+                Logger.Log($"YOLO model input size: {_inputWidth}x{_inputHeight}");
+
+                // Pre-allocate reusable buffers now that we know dimensions
+                int tensorSize = 3 * _inputHeight * _inputWidth;
+                _tensorBuffer = new float[tensorSize];
+                _inputsArray = new NamedOnnxValue[1];
+                Debug.WriteLine($"Pre-allocated tensor buffer: {tensorSize * 4 / 1024}KB");
 
                 // Try to load labels from accompanying file
                 LoadLabels(modelPath);
@@ -175,13 +195,23 @@ public class YoloDetectionService : IDetectionService
 
         try
         {
-            // Clone frame data immediately to prevent issues if original frame is disposed
-            // during async processing (capture loop disposes previous frames every 100ms)
-            var frameData = new byte[frame.Data.Length];
-            Buffer.BlockCopy(frame.Data, 0, frameData, 0, frame.Data.Length);
+            // Reuse frame buffer if large enough, otherwise allocate (handles resolution changes)
+            var frameSize = frame.Data.Length;
+            if (_frameBuffer == null || _frameBuffer.Length < frameSize)
+            {
+                _frameBuffer = new byte[frameSize];
+            }
+
+            // Copy frame data to reusable buffer
+            Buffer.BlockCopy(frame.Data, 0, _frameBuffer, 0, frameSize);
             var frameWidth = frame.Width;
             var frameHeight = frame.Height;
             var frameStride = frame.Stride;
+
+            // Capture references for closure
+            var tensorBuffer = _tensorBuffer!;
+            var inputsArray = _inputsArray!;
+            var frameBuffer = _frameBuffer;
 
             return await Task.Run(() =>
             {
@@ -189,17 +219,14 @@ public class YoloDetectionService : IDetectionService
                 {
                     Logger.Log($"DetectAsync: Starting inference on {frameWidth}x{frameHeight} frame");
 
-                    // Preprocess: Convert BGRA to RGB and resize to model input size
-                    var inputTensor = PreprocessFrameData(frameData, frameWidth, frameHeight, frameStride);
+                    // Preprocess: Convert BGRA to RGB and resize to model input size (uses reusable buffer)
+                    var inputTensor = PreprocessFrameDataReusable(frameBuffer, frameWidth, frameHeight, frameStride, tensorBuffer);
 
-                    // Run inference
+                    // Run inference using reusable inputs array
                     Logger.Log("DetectAsync: Running ONNX inference");
-                    var inputs = new List<NamedOnnxValue>
-                    {
-                        NamedOnnxValue.CreateFromTensor(_inputName, inputTensor)
-                    };
+                    inputsArray[0] = NamedOnnxValue.CreateFromTensor(_inputName, inputTensor);
 
-                    using var results = session.Run(inputs);
+                    using var results = session.Run(inputsArray);
                     Logger.Log("DetectAsync: Inference complete, processing output");
                     var outputTensor = results.First().AsTensor<float>();
 
@@ -292,6 +319,47 @@ public class YoloDetectionService : IDetectionService
         tensorArray.AsSpan().CopyTo(tensorSpan);
 
         return tensor;
+    }
+
+    /// <summary>
+    /// Preprocesses frame data using a reusable buffer to avoid allocations.
+    /// Writes directly to the provided tensor buffer.
+    /// </summary>
+    private DenseTensor<float> PreprocessFrameDataReusable(byte[] data, int width, int height, int stride, float[] tensorBuffer)
+    {
+        // Calculate scaling factors
+        float scaleX = (float)width / _inputWidth;
+        float scaleY = (float)height / _inputHeight;
+
+        const float inv255 = 1f / 255f;
+        int channelSize = _inputHeight * _inputWidth;
+        int inputWidth = _inputWidth;
+        int inputHeight = _inputHeight;
+
+        // Process rows in parallel, writing directly to reusable buffer
+        Parallel.For(0, inputHeight, y =>
+        {
+            int srcY = Math.Min((int)(y * scaleY), height - 1);
+            int srcRowOffset = srcY * stride;
+            int tensorRowOffset = y * inputWidth;
+
+            for (int x = 0; x < inputWidth; x++)
+            {
+                int srcX = Math.Min((int)(x * scaleX), width - 1);
+                int srcOffset = srcRowOffset + srcX * 4;
+
+                if (srcOffset + 2 >= data.Length)
+                    continue;
+
+                int pixelIndex = tensorRowOffset + x;
+                tensorBuffer[pixelIndex] = data[srcOffset + 2] * inv255;                    // R
+                tensorBuffer[channelSize + pixelIndex] = data[srcOffset + 1] * inv255;      // G
+                tensorBuffer[2 * channelSize + pixelIndex] = data[srcOffset] * inv255;      // B
+            }
+        });
+
+        // Create tensor using the pre-filled buffer (no copy - tensor uses the array directly)
+        return new DenseTensor<float>(tensorBuffer, new[] { 1, 3, _inputHeight, _inputWidth });
     }
 
     /// <summary>

@@ -17,7 +17,35 @@ public class OverlayRenderer
     private readonly VisualHost _visualHost;
     private readonly Dictionary<string, SolidColorBrush> _brushCache = new();
     private readonly Dictionary<string, Pen> _penCache = new();
+    private readonly Dictionary<string, FormattedText> _textCache = new();
     private readonly Typeface _labelTypeface = new("Segoe UI");
+    private readonly double _pixelsPerDip;
+
+    // Pre-cached brushes for common colors
+    private static readonly SolidColorBrush BlackBgBrush;
+    private static readonly SolidColorBrush WhiteBgBrush;
+    private static readonly SolidColorBrush WhiteTextBrush;
+    private static readonly SolidColorBrush BlackTextBrush;
+
+    static OverlayRenderer()
+    {
+        // Pre-create and freeze common brushes
+        var blackBg = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0));
+        blackBg.Freeze();
+        BlackBgBrush = blackBg;
+
+        var whiteBg = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255));
+        whiteBg.Freeze();
+        WhiteBgBrush = whiteBg;
+
+        var whiteText = new SolidColorBrush(Colors.White);
+        whiteText.Freeze();
+        WhiteTextBrush = whiteText;
+
+        var blackText = new SolidColorBrush(Colors.Black);
+        blackText.Freeze();
+        BlackTextBrush = blackText;
+    }
 
     public OverlayRenderer(Canvas canvas)
     {
@@ -25,6 +53,9 @@ public class OverlayRenderer
         _drawingVisual = new DrawingVisual();
         _visualHost = new VisualHost(_drawingVisual);
         _canvas.Children.Add(_visualHost);
+
+        // Cache DPI value - rarely changes
+        _pixelsPerDip = VisualTreeHelper.GetDpi(_drawingVisual).PixelsPerDip;
     }
 
     /// <summary>
@@ -122,26 +153,29 @@ public class OverlayRenderer
         bool isBlackBorder = styleLower == "highcontrastblack";
         bool isWhiteBorder = styleLower == "highcontrastwhite";
 
-        // Background color
-        var bgColor = isBlackBorder ? Colors.Black
-                    : isWhiteBorder ? Colors.White
-                    : color.Color;
-        bgColor.A = 200;
+        // Get cached brushes based on style
+        SolidColorBrush bgBrush;
+        SolidColorBrush textBrush;
 
-        // Text color
-        var textColor = isBlackBorder ? Colors.White
-                      : isWhiteBorder ? Colors.Black
-                      : Colors.White;
+        if (isBlackBorder)
+        {
+            bgBrush = BlackBgBrush;
+            textBrush = WhiteTextBrush;
+        }
+        else if (isWhiteBorder)
+        {
+            bgBrush = WhiteBgBrush;
+            textBrush = BlackTextBrush;
+        }
+        else
+        {
+            // Use group color with alpha for background
+            bgBrush = GetOrCreateBgBrush(color.Color);
+            textBrush = WhiteTextBrush;
+        }
 
-        // Create formatted text
-        var formattedText = new FormattedText(
-            label,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            _labelTypeface,
-            14,
-            new SolidColorBrush(textColor),
-            VisualTreeHelper.GetDpi(_drawingVisual).PixelsPerDip);
+        // Get or create cached formatted text
+        var formattedText = GetOrCreateFormattedText(label, textBrush);
 
         var textWidth = formattedText.Width + 8;  // Add padding
         var textHeight = formattedText.Height + 4;
@@ -151,14 +185,48 @@ public class OverlayRenderer
 
         // Draw background rectangle
         var bgRect = new Rect(x, labelY, textWidth, textHeight);
-        dc.DrawRoundedRectangle(
-            new SolidColorBrush(bgColor),
-            null,
-            bgRect,
-            3, 3);
+        dc.DrawRoundedRectangle(bgBrush, null, bgRect, 3, 3);
 
         // Draw text
         dc.DrawText(formattedText, new Point(x + 4, labelY + 2));
+    }
+
+    /// <summary>
+    /// Gets or creates a cached FormattedText for the label.
+    /// </summary>
+    private FormattedText GetOrCreateFormattedText(string label, SolidColorBrush textBrush)
+    {
+        // Cache key includes brush color to handle different styles
+        var key = $"{label}_{textBrush.Color}";
+        if (!_textCache.TryGetValue(key, out var text))
+        {
+            text = new FormattedText(
+                label,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                _labelTypeface,
+                14,
+                textBrush,
+                _pixelsPerDip);
+            _textCache[key] = text;
+        }
+        return text;
+    }
+
+    /// <summary>
+    /// Gets or creates a cached background brush with alpha.
+    /// </summary>
+    private SolidColorBrush GetOrCreateBgBrush(Color baseColor)
+    {
+        var key = $"bg_{baseColor}";
+        if (!_brushCache.TryGetValue(key, out var brush))
+        {
+            var bgColor = Color.FromArgb(200, baseColor.R, baseColor.G, baseColor.B);
+            brush = new SolidColorBrush(bgColor);
+            brush.Freeze();
+            _brushCache[key] = brush;
+        }
+        return brush;
     }
 
     /// <summary>

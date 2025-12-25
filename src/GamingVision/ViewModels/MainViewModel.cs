@@ -789,10 +789,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         _detectionCount = detections.Count;
 
                         var detectionsForRender = detections;
-                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                        {
-                            RenderOverlayDetections(detectionsForRender);
-                        });
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                            System.Windows.Threading.DispatcherPriority.Render,
+                            () => RenderOverlayDetections(detectionsForRender));
 
                         // If screen reader is also enabled, process for TTS events (on separate task to not block)
                         if (screenReaderNeedsUpdate && _detectionManager != null)
@@ -805,10 +804,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     {
                         // Inference was skipped (still processing previous frame)
                         // Clear the overlay so stale boxes don't persist at wrong positions
-                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                        {
-                            _overlayRenderer?.Clear();
-                        });
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                            System.Windows.Threading.DispatcherPriority.Render,
+                            () => _overlayRenderer?.Clear());
                     }
                 }
                 catch (Exception ex)
