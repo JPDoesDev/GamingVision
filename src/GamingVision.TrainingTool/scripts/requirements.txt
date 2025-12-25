@@ -1,17 +1,4 @@
-# GamingVision Model Training Dependencies
-#
-# Install PyTorch with CUDA 13.0 first:
-#   pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu130
-#
-# Then install remaining dependencies:
-#   pip install -r requirements.txt
-
-# YOLO training framework
-ultralytics>=8.0.0
-
-# Image labeling tool
+ultralytics
 labelImg
-
-# Utilities
 pyyaml>=6.0
 pillow>=9.0.0
