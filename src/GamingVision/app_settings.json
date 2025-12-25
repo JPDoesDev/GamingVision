@@ -1,11 +1,13 @@
 {
   "version": "0.2.0",
-  "selectedGame": "no_mans_sky",
+  "selectedGame": "arc_raiders",
   "useDirectML": true,
   "autoStartDetection": false,
   "minimizeToTray": false,
   "startMinimized": false,
-  "enableLogging": false,
+  "enableLogging": true,
   "logFilePath": "logs/gamingvision.log",
-  "checkForUpdates": true
+  "checkForUpdates": true,
+  "screenReaderEnabled": true,
+  "overlayEnabled": true
 }
