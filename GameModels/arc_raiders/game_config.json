@@ -1,9 +1,10 @@
 {
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251224_002402.onnx",
+  "modelFile": "ArcRaidersModel_v20251225_134250_640.onnx",
   "windowTitle": "ARC Raiders",
   "primaryLabels": [
+    "interact",
     "inv-title",
     "quick_menu",
     "st-title",
@@ -95,7 +96,7 @@
   },
   "overlay": {
     "enabled": true,
-    "confidenceThreshold": 0.1,
+    "confidenceThreshold": 0.35,
     "toggleHotkey": "Alt\u002BO",
     "groups": [
       {
