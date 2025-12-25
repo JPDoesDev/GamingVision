@@ -4,7 +4,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using GamingVision.Models;
 
-namespace GamingVision.Overlay.Rendering;
+namespace GamingVision.Rendering;
 
 /// <summary>
 /// Renders bounding boxes on a WPF Canvas with various visual styles.

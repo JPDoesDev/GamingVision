@@ -1,10 +1,11 @@
 using System.Runtime.InteropServices;
 using GamingVision.Native;
+using GamingVision.Utilities;
 
-namespace GamingVision.Overlay.Services;
+namespace GamingVision.Services.Hotkeys;
 
 /// <summary>
-/// Service for handling global hotkeys in the overlay application.
+/// Service for handling global hotkeys for overlay toggle.
 /// Uses a message-only window for hotkey registration.
 /// </summary>
 public class OverlayHotkeyService : IDisposable
@@ -47,27 +48,27 @@ public class OverlayHotkeyService : IDisposable
 
         try
         {
-            OverlayLogger.Log("HotkeyService", "Stop() called, setting _running=false...");
+            Logger.Log("Stop() called, setting _running=false...");
             _running = false;
 
             if (_hwnd != IntPtr.Zero)
             {
-                OverlayLogger.Log("HotkeyService", "Posting WM_QUIT to hotkey window...");
+                Logger.Log("Posting WM_QUIT to hotkey window...");
                 PostMessage(_hwnd, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
             }
 
-            OverlayLogger.Log("HotkeyService", "Waiting for message thread to join...");
+            Logger.Log("Waiting for message thread to join...");
             if (_messageThread != null && !_messageThread.Join(500))
             {
-                OverlayLogger.Log("HotkeyService", "Thread did not join in time, continuing anyway...");
+                Logger.Log("Thread did not join in time, continuing anyway...");
             }
             _messageThread = null;
             _wndProcDelegate = null;
-            OverlayLogger.Log("HotkeyService", "Stop() complete.");
+            Logger.Log("Stop() complete.");
         }
         catch (Exception ex)
         {
-            OverlayLogger.Log("ERROR", $"Exception in HotkeyService.Stop(): {ex.Message}\n{ex.StackTrace}");
+            Logger.Error($"Exception in OverlayHotkeyService.Stop(): {ex.Message}", ex);
         }
     }
 

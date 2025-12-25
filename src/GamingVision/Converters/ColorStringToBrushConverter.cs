@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace GamingVision.Overlay.Converters;
+namespace GamingVision.Converters;
 
 /// <summary>
 /// Converts a hex color string to a SolidColorBrush.

@@ -152,6 +152,9 @@ public class YoloDetectionService : IDetectionService
     public async Task<List<DetectedObject>> DetectAsync(CapturedFrame frame, float confidenceThreshold = 0.5f)
     {
         // Capture session reference early to prevent null access if disposed during async operation
+        // Early exit if disposed or disposing
+        if (_disposed) return [];
+
         var session = _session;
         if (session == null || frame.IsDisposed)
         {
@@ -162,7 +165,7 @@ public class YoloDetectionService : IDetectionService
         // Skip if inference is already running (prevents concurrent ONNX calls which can crash)
         lock (_inferenceLock)
         {
-            if (_isInferenceRunning)
+            if (_isInferenceRunning || _disposed)
             {
                 // Return null to indicate "skipped" vs empty list for "no detections found"
                 return null!;
@@ -409,6 +412,15 @@ public class YoloDetectionService : IDetectionService
     {
         if (_disposed) return;
         _disposed = true;
+
+        // Wait for any running inference to complete before disposing the session
+        // This prevents crashes when stopping while inference is in progress
+        var spinWait = new SpinWait();
+        var timeout = DateTime.UtcNow.AddSeconds(5);
+        while (_isInferenceRunning && DateTime.UtcNow < timeout)
+        {
+            spinWait.SpinOnce();
+        }
 
         _session?.Dispose();
         _session = null;

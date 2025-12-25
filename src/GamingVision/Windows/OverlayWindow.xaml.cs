@@ -2,9 +2,9 @@ using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
 using GamingVision.Native;
-using GamingVision.Overlay.Services;
+using GamingVision.Utilities;
 
-namespace GamingVision.Overlay;
+namespace GamingVision.Windows;
 
 /// <summary>
 /// Transparent overlay window for drawing detection bounding boxes.
@@ -74,7 +74,7 @@ public partial class OverlayWindow : Window
         Width = bounds.Width;
         Height = bounds.Height;
 
-        OverlayLogger.Log("Overlay", $"Positioned on monitor {monitorIndex}: ({bounds.Left},{bounds.Top}) {bounds.Width}x{bounds.Height}");
+        Logger.Log("Overlay", $"Positioned on monitor {monitorIndex}: ({bounds.Left},{bounds.Top}) {bounds.Width}x{bounds.Height}");
     }
 
     /// <summary>

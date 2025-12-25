@@ -51,6 +51,16 @@ public class AppConfiguration
     public bool CheckForUpdates { get; set; } = true;
 
     /// <summary>
+    /// Enable screen reader (TTS) functionality when engine is running.
+    /// </summary>
+    public bool ScreenReaderEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Enable overlay display when engine is running.
+    /// </summary>
+    public bool OverlayEnabled { get; set; } = false;
+
+    /// <summary>
     /// Creates default app configuration.
     /// </summary>
     public static AppConfiguration CreateDefault() => new()
@@ -63,6 +73,8 @@ public class AppConfiguration
         StartMinimized = false,
         EnableLogging = true,
         LogFilePath = "logs/gamingvision.log",
-        CheckForUpdates = true
+        CheckForUpdates = true,
+        ScreenReaderEnabled = true,
+        OverlayEnabled = false
     };
 }

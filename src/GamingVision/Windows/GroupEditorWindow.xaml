@@ -1,6 +1,7 @@
-<Window x:Class="GamingVision.Overlay.GroupEditorWindow"
+<Window x:Class="GamingVision.Windows.GroupEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:GamingVision.Converters"
         Title="Edit Overlay Group"
         Width="550"
         Height="1050"
@@ -8,6 +9,9 @@
         MinHeight="910"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip">
+    <Window.Resources>
+        <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter"/>
+    </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

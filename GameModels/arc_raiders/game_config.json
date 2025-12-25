@@ -6,7 +6,8 @@
   "primaryLabels": [
     "inv-title",
     "quick_menu",
-    "st-title"
+    "st-title",
+    "wp-ext-elv"
   ],
   "secondaryLabels": [
     "inv-info",
@@ -80,7 +81,7 @@
     "volume": 84
   },
   "detection": {
-    "autoReadCooldown": 500,
+    "autoReadCooldown": 2500,
     "confidenceThreshold": 0.1,
     "autoReadConfidenceThreshold": 0.1,
     "nmsThreshold": 0.45,
@@ -93,7 +94,7 @@
     "readTertiaryLabelAloud": false
   },
   "overlay": {
-    "enabled": false,
+    "enabled": true,
     "confidenceThreshold": 0.1,
     "toggleHotkey": "Alt\u002BO",
     "groups": [

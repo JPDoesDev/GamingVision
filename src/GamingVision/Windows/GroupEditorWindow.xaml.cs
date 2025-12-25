@@ -7,7 +7,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using GamingVision.Models;
 
-namespace GamingVision.Overlay;
+namespace GamingVision.Windows;
 
 /// <summary>
 /// Dialog for editing overlay group properties.
@@ -374,21 +374,4 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
-}
-
-/// <summary>
-/// Represents a box style option for the dropdown.
-/// </summary>
-public class StyleOption
-{
-    public string Value { get; }
-    public string DisplayName { get; }
-
-    public StyleOption(string value, string displayName)
-    {
-        Value = value;
-        DisplayName = displayName;
-    }
-
-    public override string ToString() => DisplayName;
 }

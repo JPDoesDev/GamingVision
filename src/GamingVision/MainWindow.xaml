@@ -4,12 +4,14 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:GamingVision.ViewModels"
+        xmlns:converters="clr-namespace:GamingVision.Converters"
         mc:Ignorable="d"
         Title="GamingVision - Accessibility Tool for Gamers"
-        Height="660"
-        Width="600"
-        MinHeight="620"
-        MinWidth="550"
+        Icon="Resources/app.ico"
+        Height="900"
+        Width="650"
+        MinHeight="840"
+        MinWidth="600"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
@@ -20,138 +22,327 @@
         <!-- Stop Detection Button Color -->
         <SolidColorBrush x:Key="StopButtonBrush" Color="#FF882222"/>
         <SolidColorBrush x:Key="StopButtonHoverBrush" Color="#FFAA3333"/>
+        <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter"/>
     </Window.Resources>
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Game Selection -->
+        <!-- Game Selection and Engine Control (shared across tabs) -->
         <GroupBox Grid.Row="0" Header="Select Game">
-            <ComboBox x:Name="GameComboBox"
-                      ItemsSource="{Binding Games}"
-                      SelectedItem="{Binding SelectedGame}"
-                      DisplayMemberPath="DisplayName"
-                      AutomationProperties.Name="Game Selection"
-                      AutomationProperties.HelpText="Select the game you want to play with accessibility features"/>
+            <StackPanel>
+                <ComboBox x:Name="GameComboBox"
+                          ItemsSource="{Binding Games}"
+                          SelectedItem="{Binding SelectedGame}"
+                          DisplayMemberPath="DisplayName"
+                          AutomationProperties.Name="Game Selection"
+                          AutomationProperties.HelpText="Select the game you want to play with accessibility features"/>
+
+                <Button Command="{Binding ToggleEngineCommand}"
+                        HorizontalAlignment="Center"
+                        Margin="0,10,0,0"
+                        FontWeight="Bold"
+                        AutomationProperties.Name="Toggle Engine">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="Content" Value="START ENGINE"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
+                                    <Setter Property="Content" Value="STOP ENGINE"/>
+                                    <Setter Property="Background" Value="{StaticResource StopButtonBrush}"/>
+                                </DataTrigger>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
+                                        <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Background" Value="{StaticResource StopButtonHoverBrush}"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
         </GroupBox>
 
-        <!-- Action Buttons -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,20">
-            <Button Command="{Binding ToggleDetectionCommand}"
-                    AutomationProperties.Name="Toggle Detection"
-                    FontWeight="Bold">
-                <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                        <Setter Property="Content" Value="START DETECTION"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsDetectionRunning}" Value="True">
-                                <Setter Property="Content" Value="STOP DETECTION"/>
-                                <Setter Property="Background" Value="{StaticResource StopButtonBrush}"/>
-                            </DataTrigger>
-                            <MultiDataTrigger>
-                                <MultiDataTrigger.Conditions>
-                                    <Condition Binding="{Binding IsDetectionRunning}" Value="True"/>
-                                    <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
-                                </MultiDataTrigger.Conditions>
-                                <Setter Property="Background" Value="{StaticResource StopButtonHoverBrush}"/>
-                            </MultiDataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
-            <Button Content="GAME SETTINGS"
-                    Command="{Binding OpenGameSettingsCommand}"
-                    AutomationProperties.Name="Open Game Settings"/>
+        <!-- Tab Control -->
+        <TabControl Grid.Row="1" Margin="0,10,0,10">
+            <!-- Screen Reader Tab -->
+            <TabItem Header="Screen Reader">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Enable Screen Reader Checkbox and Game Settings -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
+                        <CheckBox Content="Enable Screen Reader"
+                                  IsChecked="{Binding IsScreenReaderEnabled}"
+                                  VerticalAlignment="Center"
+                                  FontWeight="Bold"
+                                  AutomationProperties.Name="Enable Screen Reader"/>
+                        <Button Content="GAME SETTINGS"
+                                Command="{Binding OpenGameSettingsCommand}"
+                                Margin="15,0,0,0"
+                                AutomationProperties.Name="Open Game Settings"/>
+                    </StackPanel>
+
+                    <!-- Status -->
+                    <GroupBox Grid.Row="1" Header="Status">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Detection:" Margin="0,4" FontWeight="Bold"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DetectionStatus}" Margin="15,4"
+                                       AutomationProperties.Name="Detection Status"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Model:" Margin="0,4" FontWeight="Bold"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ModelStatus}" Margin="15,4"
+                                       AutomationProperties.Name="Model Status"/>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Objects:" Margin="0,4" FontWeight="Bold"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentDetectionCount}" Margin="15,4"
+                                       AutomationProperties.Name="Current Detection Count"/>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Last Read:" Margin="0,4" FontWeight="Bold"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LastReadText}" Margin="15,4"
+                                       TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.Name="Last Read Text"/>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="GPU:" Margin="0,4" FontWeight="Bold"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding GpuInfo}" Margin="15,4"
+                                       TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.Name="GPU Information"/>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Hotkeys -->
+                    <GroupBox Grid.Row="2" Header="Keyboard Shortcuts" AutomationProperties.Name="Keyboard Shortcuts">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4">
+                                <Run Text="{Binding HotkeyReadPrimary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Read Primary"/>
+                            </TextBlock>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="15,4">
+                                <Run Text="{Binding HotkeyStopReading, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Stop Reading"/>
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4">
+                                <Run Text="{Binding HotkeyReadSecondary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Read Secondary"/>
+                            </TextBlock>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="15,4">
+                                <Run Text="{Binding HotkeyToggleDetection, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Toggle Engine"/>
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4">
+                                <Run Text="{Binding HotkeyReadTertiary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Read Tertiary"/>
+                            </TextBlock>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="15,4">
+                                <Run Text="{Binding HotkeyQuit, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+                                <Run Text=": Quit"/>
+                            </TextBlock>
+                        </Grid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Overlay Tab -->
+            <TabItem Header="Overlay">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Enable Overlay Checkbox -->
+                    <CheckBox Grid.Row="0"
+                              Content="Enable Overlay"
+                              IsChecked="{Binding IsOverlayEnabled}"
+                              HorizontalAlignment="Center"
+                              FontWeight="Bold"
+                              Margin="0,0,0,15"
+                              AutomationProperties.Name="Enable Overlay"/>
+
+                    <!-- Overlay Settings -->
+                    <GroupBox Header="Overlay Settings" Grid.Row="1">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="60"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Confidence Threshold:" VerticalAlignment="Center"/>
+                                <Slider x:Name="ConfidenceSlider"
+                                        Grid.Column="1"
+                                        Minimum="0.1"
+                                        Maximum="1.0"
+                                        Value="{Binding OverlayConfidenceThreshold}"
+                                        TickFrequency="0.05"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        Margin="10,0"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding OverlayConfidenceThreshold, StringFormat={}{0:F2}}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"/>
+                            </Grid>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Toggle Hotkey:" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding OverlayToggleHotkey, UpdateSourceTrigger=PropertyChanged}"
+                                         MaxLength="20"/>
+                            </Grid>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Overlay Groups -->
+                    <GroupBox Header="Overlay Groups" Grid.Row="2">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <ListBox x:Name="GroupsListBox"
+                                     ItemsSource="{Binding OverlayGroups}"
+                                     SelectedItem="{Binding SelectedOverlayGroup}"
+                                     Grid.Row="0"
+                                     Margin="0,0,0,10">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="20"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Color indicator -->
+                                            <Rectangle Width="16" Height="16"
+                                                       Fill="{Binding Color, Converter={StaticResource ColorStringToBrushConverter}}"
+                                                       Stroke="White"
+                                                       StrokeThickness="1"/>
+                                            <!-- Group name -->
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Name}"
+                                                       Margin="10,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                            <!-- Label count -->
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding Labels.Count, StringFormat=({0} labels)}"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="Add" Command="{Binding AddGroupCommand}" MinWidth="70"/>
+                                <Button Content="Edit" Command="{Binding EditGroupCommand}" MinWidth="70"/>
+                                <Button Content="Remove" Command="{Binding RemoveGroupCommand}" MinWidth="70"/>
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Status Indicator -->
+                    <Border Grid.Row="3"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10,5"
+                            Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Ellipse Width="12" Height="12" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#666666"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOverlayRunning}" Value="True">
+                                                <Setter Property="Fill" Value="#00FF00"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Overlay Inactive"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOverlayRunning}" Value="True">
+                                                <Setter Property="Text" Value="Overlay Active - Detecting"/>
+                                                <Setter Property="Foreground" Value="#00FF00"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Note -->
+                    <Border Grid.Row="4"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10"
+                            Margin="0,10,0,0">
+                        <TextBlock Text="Note: For best compatibility, use borderless windowed mode in your game."
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Bottom Button (shared) -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Content="APP SETTINGS"
                     Command="{Binding OpenAppSettingsCommand}"
                     AutomationProperties.Name="Open Application Settings"/>
         </StackPanel>
-
-        <!-- Status -->
-        <GroupBox Grid.Row="2" Header="Status">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Detection:" Margin="0,4" FontWeight="Bold"/>
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DetectionStatus}" Margin="15,4"
-                           AutomationProperties.Name="Detection Status"/>
-
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Model:" Margin="0,4" FontWeight="Bold"/>
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ModelStatus}" Margin="15,4"
-                           AutomationProperties.Name="Model Status"/>
-
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="Objects:" Margin="0,4" FontWeight="Bold"/>
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentDetectionCount}" Margin="15,4"
-                           AutomationProperties.Name="Current Detection Count"/>
-
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="Last Read:" Margin="0,4" FontWeight="Bold"/>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LastReadText}" Margin="15,4"
-                           TextTrimming="CharacterEllipsis"
-                           AutomationProperties.Name="Last Read Text"/>
-
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="GPU:" Margin="0,4" FontWeight="Bold"/>
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding GpuInfo}" Margin="15,4"
-                           TextTrimming="CharacterEllipsis"
-                           AutomationProperties.Name="GPU Information"/>
-            </Grid>
-        </GroupBox>
-
-        <!-- Hotkeys -->
-        <GroupBox Grid.Row="3" Header="Keyboard Shortcuts" AutomationProperties.Name="Keyboard Shortcuts">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4">
-                    <Run Text="{Binding HotkeyReadPrimary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Read Primary"/>
-                </TextBlock>
-                <TextBlock Grid.Row="0" Grid.Column="1" Margin="15,4">
-                    <Run Text="{Binding HotkeyStopReading, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Stop Reading"/>
-                </TextBlock>
-
-                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4">
-                    <Run Text="{Binding HotkeyReadSecondary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Read Secondary"/>
-                </TextBlock>
-                <TextBlock Grid.Row="1" Grid.Column="1" Margin="15,4">
-                    <Run Text="{Binding HotkeyToggleDetection, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Toggle Detection"/>
-                </TextBlock>
-
-                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4">
-                    <Run Text="{Binding HotkeyReadTertiary, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Read Tertiary"/>
-                </TextBlock>
-                <TextBlock Grid.Row="2" Grid.Column="1" Margin="15,4">
-                    <Run Text="{Binding HotkeyQuit, Mode=OneWay}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
-                    <Run Text=": Quit"/>
-                </TextBlock>
-            </Grid>
-        </GroupBox>
     </Grid>
 </Window>

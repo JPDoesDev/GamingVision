@@ -3,12 +3,14 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GamingVision.Models;
+using GamingVision.Rendering;
 using GamingVision.Services.Detection;
 using GamingVision.Services.Hotkeys;
 using GamingVision.Services.Ocr;
 using GamingVision.Services.ScreenCapture;
 using GamingVision.Services.Tts;
 using GamingVision.Utilities;
+using GamingVision.Windows;
 
 namespace GamingVision.ViewModels;
 
@@ -30,6 +32,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private int _detectionCount;
     private bool _disposed;
 
+    // Overlay fields
+    private OverlayWindow? _overlayWindow;
+    private OverlayRenderer? _overlayRenderer;
+    private OverlayHotkeyService? _overlayHotkeyService;
+    private bool _overlayVisible = true;
+    private volatile bool _stoppingOverlay;
+
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
 
@@ -37,7 +46,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private GameProfileItem? _selectedGame;
 
     [ObservableProperty]
-    private bool _isDetectionRunning;
+    private bool _isEngineRunning;
+
+    [ObservableProperty]
+    private bool _isScreenReaderEnabled = true;
+
+    [ObservableProperty]
+    private bool _isOverlayEnabled;
 
     [ObservableProperty]
     private string _detectionStatus = "Stopped";
@@ -72,6 +87,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _hotkeyQuit = "Alt+Q";
 
+    // Overlay properties
+    [ObservableProperty]
+    private bool _isOverlayRunning;
+
+    [ObservableProperty]
+    private float _overlayConfidenceThreshold = 0.5f;
+
+    [ObservableProperty]
+    private string _overlayToggleHotkey = "Alt+O";
+
+    [ObservableProperty]
+    private ObservableCollection<OverlayGroup> _overlayGroups = [];
+
+    [ObservableProperty]
+    private OverlayGroup? _selectedOverlayGroup;
+
     public MainViewModel()
     {
         _configManager = new ConfigManager();
@@ -99,6 +130,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         LoadGames();
         UpdateGpuInfo();
         RegisterHotkeys();
+
+        // Load saved feature toggle states
+        IsScreenReaderEnabled = _appConfig.ScreenReaderEnabled;
+        IsOverlayEnabled = _appConfig.OverlayEnabled;
+
         Logger.Log("MainViewModel initialized");
     }
 
@@ -165,7 +201,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     break;
 
                 case HotkeyId.ToggleDetection:
-                    await ToggleDetectionAsync();
+                    await ToggleEngineAsync();
                     break;
 
                 case HotkeyId.Quit:
@@ -186,7 +222,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Logger.Log("ReadPrimaryObjectsAsync: Starting");
 
-        if (_detectionManager == null || !IsDetectionRunning)
+        if (_detectionManager == null || !IsEngineRunning)
         {
             Logger.Log("ReadPrimaryObjectsAsync: Detection not running, playing beep");
             System.Media.SystemSounds.Beep.Play();
@@ -286,7 +322,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task ReadSecondaryObjectsAsync()
     {
-        if (_detectionManager == null || !IsDetectionRunning)
+        if (_detectionManager == null || !IsEngineRunning)
         {
             System.Media.SystemSounds.Beep.Play();
             return;
@@ -354,7 +390,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task ReadTertiaryObjectsAsync()
     {
-        if (_detectionManager == null || !IsDetectionRunning)
+        if (_detectionManager == null || !IsEngineRunning)
         {
             System.Media.SystemSounds.Beep.Play();
             return;
@@ -528,9 +564,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _appConfig.SelectedGame = value.Key;
         UpdateHotkeyDisplay();
         RegisterHotkeys(); // Re-register hotkeys for the new game profile
+        LoadOverlaySettings(); // Load overlay settings for the new game profile
 
         // Save the selection
         Task.Run(async () => await _configManager.SaveAppSettingsAsync(_appConfig));
+    }
+
+    /// <summary>
+    /// Loads overlay settings from the current game profile.
+    /// </summary>
+    private void LoadOverlaySettings()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile?.Overlay == null) return;
+
+        OverlayConfidenceThreshold = profile.Overlay.ConfidenceThreshold;
+        OverlayToggleHotkey = profile.Overlay.ToggleHotkey;
+
+        OverlayGroups.Clear();
+        foreach (var group in profile.Overlay.Groups)
+        {
+            OverlayGroups.Add(group);
+        }
     }
 
     private void UpdateHotkeyDisplay()
@@ -573,21 +628,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task ToggleDetectionAsync()
+    private async Task ToggleEngineAsync()
     {
-        if (IsDetectionRunning)
+        if (IsEngineRunning)
         {
-            StopDetection();
+            StopEngine();
         }
         else
         {
-            await StartDetectionAsync();
+            await StartEngineAsync();
         }
     }
 
-    private async Task StartDetectionAsync()
+    private async Task StartEngineAsync()
     {
-        Logger.Log("Starting detection");
+        Logger.Log("Starting engine");
         var profile = GetSelectedGameProfile();
         if (profile == null)
         {
@@ -596,12 +651,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // Initialize detection manager
+        // Initialize detection manager (only subscribe to DetectionsReady for UI updates)
         _detectionManager?.Dispose();
         _detectionManager = new DetectionManager();
         _detectionManager.DetectionsReady += OnDetectionsReady;
-        _detectionManager.PrimaryObjectChanged += OnPrimaryObjectChanged;
-        _detectionManager.LabelDisappeared += OnLabelDisappeared;
 
         DetectionStatus = "Loading model...";
         ModelStatus = "Loading...";
@@ -626,35 +679,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         ModelStatus = $"Loaded ({_detectionManager.DetectionService.ExecutionProvider})";
 
-        // Initialize OCR service
-        _ocrService?.Dispose();
-        _ocrService = new WindowsOcrService();
-        if (!await _ocrService.InitializeAsync())
-        {
-            System.Diagnostics.Debug.WriteLine("Warning: OCR service failed to initialize");
-        }
-
-        // Initialize TTS service
-        _ttsService?.Dispose();
-        _ttsService = new WindowsTtsService();
-        if (await _ttsService.InitializeAsync())
-        {
-            // Apply TTS settings from profile
-            _ttsService.SetRate(profile.Tts.PrimaryRate);
-            _ttsService.SetVolume(profile.Tts.Volume);
-
-            if (!string.IsNullOrEmpty(profile.Tts.PrimaryVoice))
-            {
-                _ttsService.SetVoice(profile.Tts.PrimaryVoice);
-            }
-
-            System.Diagnostics.Debug.WriteLine("TTS service initialized");
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine("Warning: TTS service failed to initialize");
-        }
-
         // Initialize capture manager
         _captureManager?.Dispose();
         _captureManager = new ScreenCaptureManager();
@@ -670,11 +694,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (await _captureManager.StartAsync())
         {
-            IsDetectionRunning = true;
+            IsEngineRunning = true;
             DetectionStatus = "Running";
             _frameCount = 0;
             _detectionCount = 0;
             CurrentDetectionCount = 0;
+
+            // Enable features based on saved settings
+            if (IsScreenReaderEnabled)
+            {
+                await EnableScreenReaderAsync();
+            }
+            if (IsOverlayEnabled)
+            {
+                EnableOverlay();
+            }
         }
         else
         {
@@ -682,22 +716,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void StopDetection()
+    private void StopEngine()
     {
-        Logger.Log("Stopping detection");
+        Logger.Log("Stopping engine");
+
+        // Disable both features first
+        DisableScreenReader();
+        DisableOverlay();
+
+        // Stop capture and detection
         _captureManager?.Stop();
-        _ttsService?.Stop();
-        _ttsService?.ClearQueue();
 
         if (_detectionManager != null)
         {
             _detectionManager.DetectionsReady -= OnDetectionsReady;
-            _detectionManager.PrimaryObjectChanged -= OnPrimaryObjectChanged;
-            _detectionManager.LabelDisappeared -= OnLabelDisappeared;
-            _detectionManager.StopTrackingAllLabels();
+            _detectionManager.Dispose();
+            _detectionManager = null;
         }
 
-        IsDetectionRunning = false;
+        IsEngineRunning = false;
         DetectionStatus = "Stopped";
         CurrentDetectionCount = 0;
     }
@@ -764,6 +801,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             CurrentDetectionCount = e.AllDetections.Count;
+
+            // Feed overlay renderer if running
+            if (IsOverlayRunning && _overlayRenderer != null && _overlayVisible)
+            {
+                RenderOverlayDetections(e.AllDetections);
+            }
         });
     }
 
@@ -868,10 +911,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task OpenGameSettingsAsync()
     {
         // Stop detection before changing settings
-        var wasRunning = IsDetectionRunning;
+        var wasRunning = IsEngineRunning;
         if (wasRunning)
         {
-            StopDetection();
+            StopEngine();
         }
 
         var settingsWindow = new Views.GameSettingsWindow(_appConfig, _configManager);
@@ -893,7 +936,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Restart detection if it was running before
             if (wasRunning)
             {
-                await StartDetectionAsync();
+                await StartEngineAsync();
             }
         }
     }
@@ -902,10 +945,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private async Task OpenAppSettingsAsync()
     {
         // Stop detection before changing settings
-        var wasRunning = IsDetectionRunning;
+        var wasRunning = IsEngineRunning;
         if (wasRunning)
         {
-            StopDetection();
+            StopEngine();
         }
 
         var settingsWindow = new Views.AppSettingsWindow(_appConfig, _configManager);
@@ -919,10 +962,305 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Restart detection if it was running (will use new settings like DirectML toggle)
             if (wasRunning)
             {
-                await StartDetectionAsync();
+                await StartEngineAsync();
             }
         }
     }
+
+    #region Screen Reader Enable/Disable
+
+    private async Task EnableScreenReaderAsync()
+    {
+        if (!IsEngineRunning) return;
+
+        Logger.Log("Enabling screen reader");
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Initialize OCR service
+        _ocrService?.Dispose();
+        _ocrService = new WindowsOcrService();
+        if (!await _ocrService.InitializeAsync())
+        {
+            System.Diagnostics.Debug.WriteLine("Warning: OCR service failed to initialize");
+        }
+
+        // Initialize TTS service
+        _ttsService?.Dispose();
+        _ttsService = new WindowsTtsService();
+        if (await _ttsService.InitializeAsync())
+        {
+            _ttsService.SetRate(profile.Tts.PrimaryRate);
+            _ttsService.SetVolume(profile.Tts.Volume);
+
+            if (!string.IsNullOrEmpty(profile.Tts.PrimaryVoice))
+            {
+                _ttsService.SetVoice(profile.Tts.PrimaryVoice);
+            }
+
+            System.Diagnostics.Debug.WriteLine("TTS service initialized");
+        }
+
+        // Subscribe to detection events for TTS auto-read
+        if (_detectionManager != null)
+        {
+            _detectionManager.PrimaryObjectChanged += OnPrimaryObjectChanged;
+            _detectionManager.LabelDisappeared += OnLabelDisappeared;
+        }
+
+        Logger.Log("Screen reader enabled");
+    }
+
+    private void DisableScreenReader()
+    {
+        Logger.Log("Disabling screen reader");
+
+        _ttsService?.Stop();
+        _ttsService?.ClearQueue();
+        _ttsService?.Dispose();
+        _ttsService = null;
+
+        _ocrService?.Dispose();
+        _ocrService = null;
+
+        // Unsubscribe from TTS events
+        if (_detectionManager != null)
+        {
+            _detectionManager.PrimaryObjectChanged -= OnPrimaryObjectChanged;
+            _detectionManager.LabelDisappeared -= OnLabelDisappeared;
+            _detectionManager.StopTrackingAllLabels();
+        }
+
+        Logger.Log("Screen reader disabled");
+    }
+
+    #endregion
+
+    #region Overlay Enable/Disable
+
+    private void EnableOverlay()
+    {
+        if (!IsEngineRunning || IsOverlayRunning) return;
+
+        Logger.Log("Enabling overlay");
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Create overlay window
+        _overlayWindow = new OverlayWindow();
+        _overlayRenderer = new OverlayRenderer(_overlayWindow.Canvas);
+
+        // Position on correct monitor
+        var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
+        _overlayWindow.PositionOverMonitor(monitorIndex);
+        _overlayWindow.Show();
+
+        // Register overlay hotkey
+        var hotkey = profile.Overlay?.ToggleHotkey ?? "Alt+O";
+        _overlayHotkeyService = new OverlayHotkeyService(hotkey);
+        _overlayHotkeyService.HotkeyPressed += OnOverlayHotkeyPressed;
+        _overlayHotkeyService.Start();
+
+        _overlayVisible = true;
+        IsOverlayRunning = true;
+        Logger.Log("Overlay enabled");
+    }
+
+    private void DisableOverlay()
+    {
+        if (_stoppingOverlay || !IsOverlayRunning) return;
+
+        try
+        {
+            _stoppingOverlay = true;
+            Logger.Log("Disabling overlay");
+
+            _overlayHotkeyService?.Stop();
+            _overlayHotkeyService?.Dispose();
+            _overlayHotkeyService = null;
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                _overlayWindow?.Close();
+                _overlayWindow = null;
+            });
+
+            _overlayRenderer = null;
+            IsOverlayRunning = false;
+
+            Logger.Log("Overlay disabled");
+        }
+        finally
+        {
+            _stoppingOverlay = false;
+        }
+    }
+
+    private void OnOverlayHotkeyPressed(object? sender, EventArgs e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            _overlayVisible = !_overlayVisible;
+            if (_overlayWindow != null)
+            {
+                if (_overlayVisible)
+                {
+                    _overlayWindow.Show();
+                }
+                else
+                {
+                    _overlayWindow.Hide();
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Renders overlay detections on the canvas.
+    /// </summary>
+    private void RenderOverlayDetections(List<DetectedObject> detections)
+    {
+        if (_overlayRenderer == null || !_overlayVisible) return;
+
+        _overlayRenderer.Clear();
+
+        foreach (var group in OverlayGroups)
+        {
+            var groupDetections = detections
+                .Where(d => group.Labels.Contains(d.Label))
+                .Where(d => d.Confidence >= group.ConfidenceThreshold);
+
+            foreach (var det in groupDetections)
+            {
+                _overlayRenderer.DrawBox(det.X1, det.Y1, det.Width, det.Height, det.Label, group);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void AddGroup()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Get all available labels from the model
+        var availableLabels = profile.Labels?.Select(l => l.Name).ToList() ?? [];
+
+        var newGroup = new OverlayGroup
+        {
+            Name = $"Group {OverlayGroups.Count + 1}",
+            Color = "#FF0000",
+            Thickness = 2,
+            ShowLabel = true,
+            ConfidenceThreshold = 0.5f,
+            Style = "outlined",
+            Labels = []
+        };
+
+        var editor = new GroupEditorWindow(newGroup, availableLabels);
+        editor.Owner = System.Windows.Application.Current.MainWindow;
+
+        if (editor.ShowDialog() == true)
+        {
+            OverlayGroups.Add(newGroup);
+            SaveOverlaySettings();
+        }
+    }
+
+    [RelayCommand]
+    private void EditGroup()
+    {
+        if (SelectedOverlayGroup == null) return;
+
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        var availableLabels = profile.Labels?.Select(l => l.Name).ToList() ?? [];
+
+        var editor = new GroupEditorWindow(SelectedOverlayGroup, availableLabels);
+        editor.Owner = System.Windows.Application.Current.MainWindow;
+
+        if (editor.ShowDialog() == true)
+        {
+            // Trigger UI refresh
+            var index = OverlayGroups.IndexOf(SelectedOverlayGroup);
+            if (index >= 0)
+            {
+                OverlayGroups[index] = SelectedOverlayGroup;
+            }
+            SaveOverlaySettings();
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveGroup()
+    {
+        if (SelectedOverlayGroup == null) return;
+
+        OverlayGroups.Remove(SelectedOverlayGroup);
+        SelectedOverlayGroup = OverlayGroups.FirstOrDefault();
+        SaveOverlaySettings();
+    }
+
+    /// <summary>
+    /// Saves the current overlay settings to the game profile.
+    /// </summary>
+    private void SaveOverlaySettings()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        profile.Overlay ??= new OverlaySettings();
+        profile.Overlay.ConfidenceThreshold = OverlayConfidenceThreshold;
+        profile.Overlay.ToggleHotkey = OverlayToggleHotkey;
+        profile.Overlay.Groups = OverlayGroups.ToList();
+
+        Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
+    }
+
+    #endregion
+
+    #region Property Change Handlers
+
+    partial void OnIsScreenReaderEnabledChanged(bool value)
+    {
+        if (IsEngineRunning)
+        {
+            if (value)
+            {
+                _ = EnableScreenReaderAsync();
+            }
+            else
+            {
+                DisableScreenReader();
+            }
+        }
+
+        // Save setting
+        _appConfig.ScreenReaderEnabled = value;
+        _ = _configManager.SaveAppSettingsAsync(_appConfig);
+    }
+
+    partial void OnIsOverlayEnabledChanged(bool value)
+    {
+        if (IsEngineRunning)
+        {
+            if (value)
+            {
+                EnableOverlay();
+            }
+            else
+            {
+                DisableOverlay();
+            }
+        }
+
+        // Save setting
+        _appConfig.OverlayEnabled = value;
+        _ = _configManager.SaveAppSettingsAsync(_appConfig);
+    }
+
+    #endregion
 
     /// <summary>
     /// Gets the current app configuration.
@@ -945,11 +1283,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _hotkeyService.HotkeyPressed -= OnHotkeyPressed;
         }
 
-        StopDetection();
+        StopEngine();
         _captureManager?.Dispose();
         _detectionManager?.Dispose();
         _ocrService?.Dispose();
         _ttsService?.Dispose();
+
+        // Clean up overlay resources
+        _overlayHotkeyService?.Dispose();
 
         GC.SuppressFinalize(this);
     }
