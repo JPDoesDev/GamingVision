@@ -15,5 +15,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         _viewModel = new MainViewModel(this);
         DataContext = _viewModel;
+        Closing += MainWindow_Closing;
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // Ensure overlay is stopped and resources cleaned up
+        _viewModel?.Cleanup();
+        Application.Current.Shutdown();
     }
 }

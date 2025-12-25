@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Interop;
 using GamingVision.Native;
+using GamingVision.Overlay.Services;
 
 namespace GamingVision.Overlay;
 
@@ -52,7 +54,31 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Resets the overlay to cover the entire screen.
+    /// Positions the overlay window to cover a specific monitor.
+    /// </summary>
+    public void PositionOverMonitor(int monitorIndex)
+    {
+        var screens = Screen.AllScreens;
+        if (monitorIndex < 0 || monitorIndex >= screens.Length)
+        {
+            monitorIndex = 0; // Fallback to primary
+        }
+
+        var screen = screens[monitorIndex];
+        var bounds = screen.Bounds;
+
+        // Must set Normal state before setting position, otherwise WPF ignores Left/Top
+        WindowState = WindowState.Normal;
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+
+        OverlayLogger.Log("Overlay", $"Positioned on monitor {monitorIndex}: ({bounds.Left},{bounds.Top}) {bounds.Width}x{bounds.Height}");
+    }
+
+    /// <summary>
+    /// Resets the overlay to cover the entire primary screen.
     /// </summary>
     public void PositionFullScreen()
     {

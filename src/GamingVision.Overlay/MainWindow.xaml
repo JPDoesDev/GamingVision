@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="GamingVision Overlay"
         Width="600"
-        Height="700"
+        Height="840"
         MinWidth="500"
-        MinHeight="550"
+        MinHeight="660"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="20">
         <Grid.RowDefinitions>

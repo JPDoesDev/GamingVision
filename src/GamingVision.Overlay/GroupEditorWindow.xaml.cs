@@ -28,7 +28,7 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
         _allLabels = availableLabels;
 
         // Initialize properties from group
-        Name = group.Name;
+        GroupName = group.Name;
         Color = group.Color;
         Thickness = group.Thickness;
         ShowLabel = group.ShowLabel;
@@ -48,18 +48,108 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
     public OverlayGroup Group => _group;
 
     // Bindable properties
-    private string _name = string.Empty;
-    public new string Name
+    private string _groupName = string.Empty;
+    public string GroupName
     {
-        get => _name;
-        set { _name = value; OnPropertyChanged(); }
+        get => _groupName;
+        set { _groupName = value; OnPropertyChanged(); }
     }
 
     private string _color = "#FF0000";
+    private bool _updatingColor;
+
     public string Color
     {
         get => _color;
-        set { _color = value; OnPropertyChanged(); }
+        set
+        {
+            if (_color != value)
+            {
+                _color = value;
+                OnPropertyChanged();
+
+                // Update RGB sliders from hex (avoid circular updates)
+                if (!_updatingColor)
+                {
+                    _updatingColor = true;
+                    try
+                    {
+                        var color = ParseColor(value);
+                        _red = color.R;
+                        _green = color.G;
+                        _blue = color.B;
+                        OnPropertyChanged(nameof(Red));
+                        OnPropertyChanged(nameof(Green));
+                        OnPropertyChanged(nameof(Blue));
+                    }
+                    finally
+                    {
+                        _updatingColor = false;
+                    }
+                }
+            }
+        }
+    }
+
+    private int _red = 255;
+    public int Red
+    {
+        get => _red;
+        set
+        {
+            if (_red != value)
+            {
+                _red = Math.Clamp(value, 0, 255);
+                OnPropertyChanged();
+                UpdateColorFromRgb();
+            }
+        }
+    }
+
+    private int _green;
+    public int Green
+    {
+        get => _green;
+        set
+        {
+            if (_green != value)
+            {
+                _green = Math.Clamp(value, 0, 255);
+                OnPropertyChanged();
+                UpdateColorFromRgb();
+            }
+        }
+    }
+
+    private int _blue;
+    public int Blue
+    {
+        get => _blue;
+        set
+        {
+            if (_blue != value)
+            {
+                _blue = Math.Clamp(value, 0, 255);
+                OnPropertyChanged();
+                UpdateColorFromRgb();
+            }
+        }
+    }
+
+    private void UpdateColorFromRgb()
+    {
+        if (!_updatingColor)
+        {
+            _updatingColor = true;
+            try
+            {
+                Color = $"#{_red:X2}{_green:X2}{_blue:X2}";
+            }
+            finally
+            {
+                _updatingColor = false;
+            }
+        }
     }
 
     private int _thickness = 2;
@@ -83,49 +173,24 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
         set { _confidenceThreshold = value; OnPropertyChanged(); }
     }
 
-    // Style radio button bindings
-    private bool _isSolid = true;
-    public bool IsSolid
+    // Style dropdown
+    public List<StyleOption> StyleOptions { get; } = new()
     {
-        get => _isSolid;
-        set { if (value) { _isSolid = true; _isDashed = _isFilled = _isHighContrast = _isHighContrastInverted = false; NotifyStyleChanged(); } }
-    }
+        new StyleOption("outlined", "Outlined"),
+        new StyleOption("highContrastBlack", "High Contrast (Black border)"),
+        new StyleOption("highContrastWhite", "High Contrast (White border)")
+    };
 
-    private bool _isDashed;
-    public bool IsDashed
+    private StyleOption? _selectedStyle;
+    public StyleOption? SelectedStyle
     {
-        get => _isDashed;
-        set { if (value) { _isDashed = true; _isSolid = _isFilled = _isHighContrast = _isHighContrastInverted = false; NotifyStyleChanged(); } }
-    }
-
-    private bool _isFilled;
-    public bool IsFilled
-    {
-        get => _isFilled;
-        set { if (value) { _isFilled = true; _isSolid = _isDashed = _isHighContrast = _isHighContrastInverted = false; NotifyStyleChanged(); } }
-    }
-
-    private bool _isHighContrast;
-    public bool IsHighContrast
-    {
-        get => _isHighContrast;
-        set { if (value) { _isHighContrast = true; _isSolid = _isDashed = _isFilled = _isHighContrastInverted = false; NotifyStyleChanged(); } }
-    }
-
-    private bool _isHighContrastInverted;
-    public bool IsHighContrastInverted
-    {
-        get => _isHighContrastInverted;
-        set { if (value) { _isHighContrastInverted = true; _isSolid = _isDashed = _isFilled = _isHighContrast = false; NotifyStyleChanged(); } }
-    }
-
-    private void NotifyStyleChanged()
-    {
-        OnPropertyChanged(nameof(IsSolid));
-        OnPropertyChanged(nameof(IsDashed));
-        OnPropertyChanged(nameof(IsFilled));
-        OnPropertyChanged(nameof(IsHighContrast));
-        OnPropertyChanged(nameof(IsHighContrastInverted));
+        get => _selectedStyle;
+        set
+        {
+            _selectedStyle = value;
+            OnPropertyChanged();
+            UpdatePreview();
+        }
     }
 
     public ObservableCollection<string> AvailableLabels { get; }
@@ -133,33 +198,13 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
 
     private void SetStyleFromString(string style)
     {
-        switch (style.ToLowerInvariant())
-        {
-            case "dashed":
-                IsDashed = true;
-                break;
-            case "filled":
-                IsFilled = true;
-                break;
-            case "highcontrast":
-                IsHighContrast = true;
-                break;
-            case "highcontrastinverted":
-                IsHighContrastInverted = true;
-                break;
-            default:
-                IsSolid = true;
-                break;
-        }
+        SelectedStyle = StyleOptions.FirstOrDefault(s =>
+            s.Value.Equals(style, StringComparison.OrdinalIgnoreCase)) ?? StyleOptions[0];
     }
 
     private string GetStyleString()
     {
-        if (IsDashed) return "dashed";
-        if (IsFilled) return "filled";
-        if (IsHighContrast) return "highContrast";
-        if (IsHighContrastInverted) return "highContrastInverted";
-        return "solid";
+        return SelectedStyle?.Value ?? "solid";
     }
 
     private void UpdatePreview()
@@ -171,24 +216,23 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
             var color = ParseColor(Color);
             var brush = new SolidColorBrush(color);
 
-            double x = 20, y = 10, width = 100, height = 40;
+            // Center the preview in the canvas
+            double width = 80, height = 25;
+            double x = (PreviewCanvas.ActualWidth - width) / 2;
+            double y = (PreviewCanvas.ActualHeight - height) / 2;
+            if (x < 10) x = 10;
+            if (y < 5) y = 5;
 
             switch (GetStyleString())
             {
-                case "dashed":
-                    DrawDashedPreview(x, y, width, height, brush);
-                    break;
-                case "filled":
-                    DrawFilledPreview(x, y, width, height, brush);
-                    break;
-                case "highContrast":
-                    DrawHighContrastPreview(x, y, width, height, brush, false);
-                    break;
-                case "highContrastInverted":
+                case "highContrastBlack":
                     DrawHighContrastPreview(x, y, width, height, brush, true);
                     break;
-                default:
-                    DrawSolidPreview(x, y, width, height, brush);
+                case "highContrastWhite":
+                    DrawHighContrastPreview(x, y, width, height, brush, false);
+                    break;
+                default: // "outlined"
+                    DrawOutlinedPreview(x, y, width, height, brush);
                     break;
             }
 
@@ -203,7 +247,7 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void DrawSolidPreview(double x, double y, double width, double height, SolidColorBrush brush)
+    private void DrawOutlinedPreview(double x, double y, double width, double height, SolidColorBrush brush)
     {
         var rect = new Rectangle
         {
@@ -216,63 +260,20 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
         PreviewCanvas.Children.Add(rect);
     }
 
-    private void DrawDashedPreview(double x, double y, double width, double height, SolidColorBrush brush)
+    private void DrawHighContrastPreview(double x, double y, double width, double height, SolidColorBrush brush, bool blackBorder)
     {
-        var rect = new Rectangle
-        {
-            Width = width, Height = height,
-            Stroke = brush, StrokeThickness = Thickness,
-            StrokeDashArray = new DoubleCollection { 4, 2 },
-            Fill = Brushes.Transparent
-        };
-        Canvas.SetLeft(rect, x);
-        Canvas.SetTop(rect, y);
-        PreviewCanvas.Children.Add(rect);
-    }
-
-    private void DrawFilledPreview(double x, double y, double width, double height, SolidColorBrush brush)
-    {
-        var fillColor = brush.Color;
-        fillColor.A = 64;
+        var borderBrush = blackBorder ? Brushes.Black : Brushes.White;
 
         var rect = new Rectangle
         {
             Width = width, Height = height,
-            Stroke = brush, StrokeThickness = Thickness,
-            Fill = new SolidColorBrush(fillColor)
-        };
-        Canvas.SetLeft(rect, x);
-        Canvas.SetTop(rect, y);
-        PreviewCanvas.Children.Add(rect);
-    }
-
-    private void DrawHighContrastPreview(double x, double y, double width, double height, SolidColorBrush brush, bool inverted)
-    {
-        var borderColor = inverted ? Colors.Black : Colors.White;
-        var fillColor = brush.Color;
-        fillColor.A = 128;
-
-        var outerRect = new Rectangle
-        {
-            Width = width + (Thickness * 2),
-            Height = height + (Thickness * 2),
-            Stroke = new SolidColorBrush(borderColor),
+            Stroke = borderBrush,
             StrokeThickness = Thickness,
-            Fill = Brushes.Transparent
+            Fill = brush
         };
-        Canvas.SetLeft(outerRect, x - Thickness);
-        Canvas.SetTop(outerRect, y - Thickness);
-        PreviewCanvas.Children.Add(outerRect);
-
-        var innerRect = new Rectangle
-        {
-            Width = width, Height = height,
-            Stroke = brush, StrokeThickness = Thickness,
-            Fill = new SolidColorBrush(fillColor)
-        };
-        Canvas.SetLeft(innerRect, x);
-        Canvas.SetTop(innerRect, y);
-        PreviewCanvas.Children.Add(innerRect);
+        Canvas.SetLeft(rect, x);
+        Canvas.SetTop(rect, y);
+        PreviewCanvas.Children.Add(rect);
     }
 
     private void DrawLabelPreview(double x, double y, string label)
@@ -344,14 +345,14 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
 
     private void OK_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(Name))
+        if (string.IsNullOrWhiteSpace(GroupName))
         {
             MessageBox.Show("Please enter a group name.", "Validation", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         // Update the group
-        _group.Name = Name;
+        _group.Name = GroupName;
         _group.Color = Color;
         _group.Thickness = Thickness;
         _group.ShowLabel = ShowLabel;
@@ -373,4 +374,21 @@ public partial class GroupEditorWindow : Window, INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+}
+
+/// <summary>
+/// Represents a box style option for the dropdown.
+/// </summary>
+public class StyleOption
+{
+    public string Value { get; }
+    public string DisplayName { get; }
+
+    public StyleOption(string value, string displayName)
+    {
+        Value = value;
+        DisplayName = displayName;
+    }
+
+    public override string ToString() => DisplayName;
 }

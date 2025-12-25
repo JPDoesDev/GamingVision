@@ -1,8 +1,0 @@
-inv-title
-inv-info
-quick_menu
-st-title
-st-info
-interact
-map-title
-map-info

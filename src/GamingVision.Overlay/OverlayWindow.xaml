@@ -8,6 +8,6 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        WindowState="Maximized">
+        WindowState="Normal">
     <Canvas x:Name="OverlayCanvas"/>
 </Window>

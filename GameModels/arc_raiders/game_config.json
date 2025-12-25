@@ -3,6 +3,20 @@
   "displayName": "ARC Raiders",
   "modelFile": "ArcRaidersModel_v20251224_002402.onnx",
   "windowTitle": "ARC Raiders",
+  "primaryLabels": [
+    "inv-title",
+    "quick_menu",
+    "st-title"
+  ],
+  "secondaryLabels": [
+    "inv-info",
+    "st-info"
+  ],
+  "tertiaryLabels": [],
+  "labelPriority": [
+    "inv-title",
+    "inv-info"
+  ],
   "labels": [
     {
       "name": "inv-title",
@@ -25,6 +39,10 @@
       "description": "Skill tree node descriptions"
     },
     {
+      "name": "interact",
+      "description": "Object to interact with"
+    },
+    {
       "name": "wp-ext-elv",
       "description": "Watpoint: Extraction Elevator"
     },
@@ -33,27 +51,13 @@
       "description": "Hud timer for time left in the map"
     }
   ],
-  "primaryLabels": [
-    "inv-title",
-    "quick_menu",
-    "st-title"
-  ],
-  "secondaryLabels": [
-    "inv-info",
-    "st-info"
-  ],
-  "tertiaryLabels": [],
-  "labelPriority": [
-    "inv-title",
-    "inv-info"
-  ],
   "hotkeys": {
-    "readPrimary": "Alt+1",
-    "readSecondary": "Alt+2",
-    "readTertiary": "Alt+3",
-    "stopReading": "Alt+4",
-    "toggleDetection": "Alt+5",
-    "quit": "Alt+Q"
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
+    "quit": "Alt\u002BQ"
   },
   "capture": {
     "method": "fullscreen",
@@ -91,22 +95,18 @@
   "overlay": {
     "enabled": false,
     "confidenceThreshold": 0.1,
-    "toggleHotkey": "Alt+O",
+    "toggleHotkey": "Alt\u002BO",
     "groups": [
       {
         "name": "All Labels",
         "labels": [
-          "inv-title",
-          "inv-info",
-          "quick_menu",
-          "st-title",
-          "st-info"
+          "wp-ext-elv"
         ],
-        "color": "#FF0000",
-        "thickness": 2,
-        "showLabel": true,
-        "style": "solid",
-        "confidenceThreshold": 0.1
+        "color": "#FFFFFF",
+        "thickness": 10,
+        "showLabel": false,
+        "style": "highContrastBlack",
+        "confidenceThreshold": 0.15
       }
     ]
   }

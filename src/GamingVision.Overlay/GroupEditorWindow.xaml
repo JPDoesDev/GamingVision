@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Edit Overlay Group"
         Width="550"
-        Height="750"
+        Height="1050"
         MinWidth="450"
-        MinHeight="650"
+        MinHeight="910"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip">
     <Grid Margin="20">
@@ -21,7 +21,7 @@
         <!-- Group Name -->
         <GroupBox Header="Group Name" Grid.Row="0">
             <TextBox x:Name="NameTextBox"
-                     Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                     Text="{Binding GroupName, UpdateSourceTrigger=PropertyChanged}"
                      MaxLength="50"/>
         </GroupBox>
 
@@ -33,6 +33,8 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="120"/>
@@ -40,77 +42,118 @@
                     <ColumnDefinition Width="60"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Color -->
-                <TextBlock Text="Color:" VerticalAlignment="Center" Grid.Row="0"/>
-                <TextBox x:Name="ColorTextBox"
-                         Grid.Row="0" Grid.Column="1"
-                         Text="{Binding Color, UpdateSourceTrigger=PropertyChanged}"
-                         MaxLength="9"
-                         Margin="0,0,10,5"/>
+                <!-- Color - Red -->
+                <TextBlock Text="Red:" VerticalAlignment="Center" Grid.Row="0"/>
+                <Slider x:Name="RedSlider"
+                        Grid.Row="0" Grid.Column="1"
+                        Minimum="0" Maximum="255"
+                        Value="{Binding Red}"
+                        TickFrequency="1"
+                        IsSnapToTickEnabled="True"
+                        VerticalAlignment="Center"
+                        Margin="0,5,10,5"/>
+                <TextBlock Grid.Row="0" Grid.Column="2"
+                           Text="{Binding Red, StringFormat={}{0:0}}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"/>
+
+                <!-- Color - Green -->
+                <TextBlock Text="Green:" VerticalAlignment="Center" Grid.Row="1"/>
+                <Slider x:Name="GreenSlider"
+                        Grid.Row="1" Grid.Column="1"
+                        Minimum="0" Maximum="255"
+                        Value="{Binding Green}"
+                        TickFrequency="1"
+                        IsSnapToTickEnabled="True"
+                        VerticalAlignment="Center"
+                        Margin="0,5,10,5"/>
+                <TextBlock Grid.Row="1" Grid.Column="2"
+                           Text="{Binding Green, StringFormat={}{0:0}}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"/>
+
+                <!-- Color - Blue -->
+                <TextBlock Text="Blue:" VerticalAlignment="Center" Grid.Row="2"/>
+                <Slider x:Name="BlueSlider"
+                        Grid.Row="2" Grid.Column="1"
+                        Minimum="0" Maximum="255"
+                        Value="{Binding Blue}"
+                        TickFrequency="1"
+                        IsSnapToTickEnabled="True"
+                        VerticalAlignment="Center"
+                        Margin="0,5,10,5"/>
+                <TextBlock Grid.Row="2" Grid.Column="2"
+                           Text="{Binding Blue, StringFormat={}{0:0}}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"/>
+
+                <!-- Color Preview -->
+                <TextBlock Text="Preview:" VerticalAlignment="Center" Grid.Row="3"/>
                 <Rectangle x:Name="ColorPreview"
-                           Grid.Row="0" Grid.Column="2"
-                           Width="50" Height="30"
+                           Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                           Height="30"
                            Stroke="White" StrokeThickness="1"
                            Fill="{Binding Color, Converter={StaticResource ColorStringToBrushConverter}}"
-                           Margin="0,0,0,5"/>
+                           Margin="0,5,0,5"
+                           HorizontalAlignment="Stretch"/>
 
                 <!-- Thickness -->
-                <TextBlock Text="Thickness:" VerticalAlignment="Center" Grid.Row="1"/>
+                <TextBlock Text="Thickness:" VerticalAlignment="Center" Grid.Row="4"/>
                 <Slider x:Name="ThicknessSlider"
-                        Grid.Row="1" Grid.Column="1"
+                        Grid.Row="4" Grid.Column="1"
                         Minimum="1" Maximum="10"
                         Value="{Binding Thickness}"
                         TickFrequency="1"
                         IsSnapToTickEnabled="True"
                         VerticalAlignment="Center"
                         Margin="0,5,10,5"/>
-                <TextBlock Grid.Row="1" Grid.Column="2"
+                <TextBlock Grid.Row="4" Grid.Column="2"
                            Text="{Binding Thickness, StringFormat={}{0}px}"
                            VerticalAlignment="Center"
                            HorizontalAlignment="Right"/>
 
                 <!-- Confidence Threshold -->
-                <TextBlock Text="Min Confidence:" VerticalAlignment="Center" Grid.Row="2"/>
+                <TextBlock Text="Min Confidence:" VerticalAlignment="Center" Grid.Row="5"/>
                 <Slider x:Name="ConfidenceSlider"
-                        Grid.Row="2" Grid.Column="1"
+                        Grid.Row="5" Grid.Column="1"
                         Minimum="0.05" Maximum="1.0"
                         Value="{Binding ConfidenceThreshold}"
                         TickFrequency="0.05"
                         IsSnapToTickEnabled="True"
                         VerticalAlignment="Center"
                         Margin="0,5,10,5"/>
-                <TextBlock Grid.Row="2" Grid.Column="2"
+                <TextBlock Grid.Row="5" Grid.Column="2"
                            Text="{Binding ConfidenceThreshold, StringFormat={}{0:P0}}"
                            VerticalAlignment="Center"
                            HorizontalAlignment="Right"/>
-
-                <!-- Show Label -->
-                <CheckBox x:Name="ShowLabelCheckBox"
-                          Grid.Row="3" Grid.ColumnSpan="3"
-                          Content="Show label text above box"
-                          IsChecked="{Binding ShowLabel}"
-                          Margin="0,5,0,0"/>
             </Grid>
         </GroupBox>
 
-        <!-- Box Style -->
+        <!-- Box Style and Label Display -->
         <GroupBox Header="Box Style" Grid.Row="2">
-            <StackPanel>
-                <RadioButton Content="Solid - Continuous outline"
-                             IsChecked="{Binding IsSolid}"
-                             Margin="0,0,0,5"/>
-                <RadioButton Content="Dashed - Dashed outline"
-                             IsChecked="{Binding IsDashed}"
-                             Margin="0,0,0,5"/>
-                <RadioButton Content="Filled - Semi-transparent fill"
-                             IsChecked="{Binding IsFilled}"
-                             Margin="0,0,0,5"/>
-                <RadioButton Content="High Contrast - White border + colored fill"
-                             IsChecked="{Binding IsHighContrast}"
-                             Margin="0,0,0,5"/>
-                <RadioButton Content="High Contrast Inverted - Black border + colored fill"
-                             IsChecked="{Binding IsHighContrastInverted}"/>
-            </StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="Style:" VerticalAlignment="Center" Grid.Row="0"/>
+                <ComboBox x:Name="StyleComboBox"
+                          Grid.Row="0" Grid.Column="1"
+                          ItemsSource="{Binding StyleOptions}"
+                          SelectedItem="{Binding SelectedStyle}"
+                          DisplayMemberPath="DisplayName"
+                          Margin="0,0,0,10"/>
+
+                <CheckBox x:Name="ShowLabelCheckBox"
+                          Grid.Row="1" Grid.ColumnSpan="2"
+                          Content="Show label text above box"
+                          IsChecked="{Binding ShowLabel}"/>
+            </Grid>
         </GroupBox>
 
         <!-- Preview -->

@@ -17,6 +17,9 @@ public class OverlayHotkeyService : IDisposable
     private bool _running;
     private bool _disposed;
 
+    // IMPORTANT: Must keep a reference to prevent garbage collection
+    private WndProcDelegate? _wndProcDelegate;
+
     public event EventHandler? HotkeyPressed;
 
     public OverlayHotkeyService(string hotkeyString)
@@ -42,26 +45,44 @@ public class OverlayHotkeyService : IDisposable
     {
         if (!_running) return;
 
-        _running = false;
-
-        if (_hwnd != IntPtr.Zero)
+        try
         {
-            PostMessage(_hwnd, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
-        }
+            OverlayLogger.Log("HotkeyService", "Stop() called, setting _running=false...");
+            _running = false;
 
-        _messageThread?.Join(1000);
-        _messageThread = null;
+            if (_hwnd != IntPtr.Zero)
+            {
+                OverlayLogger.Log("HotkeyService", "Posting WM_QUIT to hotkey window...");
+                PostMessage(_hwnd, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+            }
+
+            OverlayLogger.Log("HotkeyService", "Waiting for message thread to join...");
+            if (_messageThread != null && !_messageThread.Join(500))
+            {
+                OverlayLogger.Log("HotkeyService", "Thread did not join in time, continuing anyway...");
+            }
+            _messageThread = null;
+            _wndProcDelegate = null;
+            OverlayLogger.Log("HotkeyService", "Stop() complete.");
+        }
+        catch (Exception ex)
+        {
+            OverlayLogger.Log("ERROR", $"Exception in HotkeyService.Stop(): {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     private void MessageLoop()
     {
+        // Store delegate as field to prevent garbage collection
+        _wndProcDelegate = WndProc;
+
         // Create a message-only window
         var wndClass = new WNDCLASSEX
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEX>(),
-            lpfnWndProc = WndProc,
+            lpfnWndProc = _wndProcDelegate,
             hInstance = GetModuleHandle(null),
-            lpszClassName = "GamingVisionOverlayHotkeyClass"
+            lpszClassName = $"GamingVisionOverlayHotkeyClass_{Environment.TickCount}"
         };
 
         RegisterClassEx(ref wndClass);

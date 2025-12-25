@@ -42,20 +42,14 @@ public class OverlayRenderer
 
         switch (group.Style.ToLowerInvariant())
         {
-            case "dashed":
-                DrawDashedBox(x, y, width, height, brush, group.Thickness);
-                break;
-            case "filled":
-                DrawFilledBox(x, y, width, height, brush, group.Thickness);
-                break;
-            case "highcontrast":
-                DrawHighContrastBox(x, y, width, height, brush, group.Thickness, false);
-                break;
-            case "highcontrastinverted":
+            case "highcontrastblack":
                 DrawHighContrastBox(x, y, width, height, brush, group.Thickness, true);
                 break;
-            default: // "solid"
-                DrawSolidBox(x, y, width, height, brush, group.Thickness);
+            case "highcontrastwhite":
+                DrawHighContrastBox(x, y, width, height, brush, group.Thickness, false);
+                break;
+            default: // "outlined"
+                DrawOutlinedBox(x, y, width, height, brush, group.Thickness);
                 break;
         }
 
@@ -66,9 +60,9 @@ public class OverlayRenderer
     }
 
     /// <summary>
-    /// Draws a solid outline box.
+    /// Draws an outlined box with the specified color.
     /// </summary>
-    private void DrawSolidBox(double x, double y, double width, double height, SolidColorBrush stroke, int thickness)
+    private void DrawOutlinedBox(double x, double y, double width, double height, SolidColorBrush stroke, int thickness)
     {
         var rect = new Rectangle
         {
@@ -85,81 +79,23 @@ public class OverlayRenderer
     }
 
     /// <summary>
-    /// Draws a dashed outline box.
+    /// Draws a high contrast box with border and solid colored fill.
     /// </summary>
-    private void DrawDashedBox(double x, double y, double width, double height, SolidColorBrush stroke, int thickness)
+    private void DrawHighContrastBox(double x, double y, double width, double height, SolidColorBrush fillBrush, int thickness, bool blackBorder)
     {
-        var rect = new Rectangle
-        {
-            Width = width,
-            Height = height,
-            Stroke = stroke,
-            StrokeThickness = thickness,
-            StrokeDashArray = new DoubleCollection { 4, 2 },
-            Fill = Brushes.Transparent
-        };
-
-        Canvas.SetLeft(rect, x);
-        Canvas.SetTop(rect, y);
-        _canvas.Children.Add(rect);
-    }
-
-    /// <summary>
-    /// Draws a box with semi-transparent fill.
-    /// </summary>
-    private void DrawFilledBox(double x, double y, double width, double height, SolidColorBrush stroke, int thickness)
-    {
-        var fillColor = stroke.Color;
-        fillColor.A = 64; // 25% opacity
+        var borderBrush = blackBorder ? Brushes.Black : Brushes.White;
 
         var rect = new Rectangle
         {
             Width = width,
             Height = height,
-            Stroke = stroke,
+            Stroke = borderBrush,
             StrokeThickness = thickness,
-            Fill = new SolidColorBrush(fillColor)
+            Fill = fillBrush
         };
-
         Canvas.SetLeft(rect, x);
         Canvas.SetTop(rect, y);
         _canvas.Children.Add(rect);
-    }
-
-    /// <summary>
-    /// Draws a high contrast box with thick border and colored fill.
-    /// </summary>
-    private void DrawHighContrastBox(double x, double y, double width, double height, SolidColorBrush colorBrush, int thickness, bool inverted)
-    {
-        var borderColor = inverted ? Colors.Black : Colors.White;
-        var fillColor = colorBrush.Color;
-        fillColor.A = 128; // 50% opacity
-
-        // Outer border (white or black)
-        var outerRect = new Rectangle
-        {
-            Width = width + (thickness * 2),
-            Height = height + (thickness * 2),
-            Stroke = new SolidColorBrush(borderColor),
-            StrokeThickness = thickness,
-            Fill = Brushes.Transparent
-        };
-        Canvas.SetLeft(outerRect, x - thickness);
-        Canvas.SetTop(outerRect, y - thickness);
-        _canvas.Children.Add(outerRect);
-
-        // Inner colored fill
-        var innerRect = new Rectangle
-        {
-            Width = width,
-            Height = height,
-            Stroke = colorBrush,
-            StrokeThickness = thickness,
-            Fill = new SolidColorBrush(fillColor)
-        };
-        Canvas.SetLeft(innerRect, x);
-        Canvas.SetTop(innerRect, y);
-        _canvas.Children.Add(innerRect);
     }
 
     /// <summary>
@@ -167,18 +103,19 @@ public class OverlayRenderer
     /// </summary>
     private void DrawLabel(double x, double y, string label, SolidColorBrush color, string style)
     {
-        bool isHighContrast = style.ToLowerInvariant().StartsWith("highcontrast");
-        bool inverted = style.ToLowerInvariant().Contains("inverted");
+        var styleLower = style.ToLowerInvariant();
+        bool isBlackBorder = styleLower == "highcontrastblack";
+        bool isWhiteBorder = styleLower == "highcontrastwhite";
 
         // Background for label
-        var bgColor = isHighContrast
-            ? (inverted ? Colors.Black : Colors.White)
-            : color.Color;
+        var bgColor = isBlackBorder ? Colors.Black
+                    : isWhiteBorder ? Colors.White
+                    : color.Color;
         bgColor.A = 200;
 
-        var textColor = isHighContrast
-            ? (inverted ? Colors.White : Colors.Black)
-            : Colors.White;
+        var textColor = isBlackBorder ? Colors.White
+                      : isWhiteBorder ? Colors.Black
+                      : Colors.White;
 
         var textBlock = new TextBlock
         {

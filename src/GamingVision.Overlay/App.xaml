@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
              xmlns:converters="clr-namespace:GamingVision.Overlay.Converters"
+             ShutdownMode="OnExplicitShutdown"
 >
     <Application.Resources>
         <ResourceDictionary>

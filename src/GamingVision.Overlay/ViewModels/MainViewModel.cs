@@ -12,6 +12,7 @@ using GamingVision.Overlay.Services;
 using GamingVision.Services.Detection;
 using GamingVision.Services.ScreenCapture;
 using GamingVision.Utilities;
+using static GamingVision.Overlay.Services.OverlayLogger;
 
 namespace GamingVision.Overlay.ViewModels;
 
@@ -42,6 +43,15 @@ public class MainViewModel : INotifyPropertyChanged
     private YoloDetectionService? _detectionService;
     private OverlayHotkeyService? _hotkeyService;
     private bool _overlayVisible = true;
+    private volatile bool _stopping;
+    private int _frameCount;
+    private int _detectionCount;
+    private int _drawnCount;
+    private DateTime _lastFpsLogTime = DateTime.Now;
+    private int _framesProcessedSinceLastLog;
+    private readonly System.Diagnostics.Stopwatch _inferenceStopwatch = new();
+    private DateTime _lastSuccessfulDetectionTime = DateTime.Now;
+    private const int StaleOverlayTimeoutMs = 100; // Clear overlay if no detection for 100ms
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -293,13 +303,26 @@ public class MainViewModel : INotifyPropertyChanged
 
     private async void ToggleOverlay()
     {
-        if (IsOverlayRunning)
+        try
         {
-            StopOverlay();
+            OverlayLogger.Log("ToggleOverlay", $"Toggle requested. IsOverlayRunning={IsOverlayRunning}");
+            if (IsOverlayRunning)
+            {
+                OverlayLogger.Log("ToggleOverlay", "Calling StopOverlay...");
+                StopOverlay();
+                OverlayLogger.Log("ToggleOverlay", "StopOverlay returned.");
+            }
+            else
+            {
+                OverlayLogger.Log("ToggleOverlay", "Calling StartOverlayAsync...");
+                await StartOverlayAsync();
+                OverlayLogger.Log("ToggleOverlay", "StartOverlayAsync returned.");
+            }
+            OverlayLogger.Log("ToggleOverlay", "Toggle complete.");
         }
-        else
+        catch (Exception ex)
         {
-            await StartOverlayAsync();
+            OverlayLogger.Log("ERROR", $"Exception in ToggleOverlay: {ex.Message}\n{ex.StackTrace}");
         }
     }
 
@@ -313,6 +336,8 @@ public class MainViewModel : INotifyPropertyChanged
             _captureService = new GdiCaptureService();
             var monitorIndex = _selectedGameProfile.Capture?.MonitorIndex ?? 0;
             _captureService.InitializeForMonitor(monitorIndex);
+            _captureService.SetCaptureInterval(33); // ~30 FPS target (frames skipped during inference)
+            Log("Capture", "Capture interval set to 33ms (~30 FPS target)");
 
             // Initialize detection service
             _detectionService = new YoloDetectionService();
@@ -328,23 +353,37 @@ public class MainViewModel : INotifyPropertyChanged
                     var appJson = File.ReadAllText(appSettingsPath);
                     var appConfig = JsonSerializer.Deserialize<AppConfiguration>(appJson, JsonOptions);
                     useGpu = appConfig?.UseDirectML ?? true;
+                    Log("Config", $"Loaded app_settings.json: useDirectML={useGpu}");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Log("Config", $"Failed to load app_settings.json: {ex.Message}, defaulting to GPU=true");
+                }
+            }
+            else
+            {
+                Log("Config", "No app_settings.json found, defaulting to GPU=true");
             }
 
+            Log("Detection", $"Initializing ONNX model with GPU={useGpu}...");
             if (!await _detectionService.InitializeAsync(modelPath, useGpu))
             {
+                Log("ERROR", $"Failed to load model: {_selectedGameProfile.ModelFile}");
                 MessageBox.Show($"Could not load model: {_selectedGameProfile.ModelFile}",
                     "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 _captureService.Dispose();
                 _captureService = null;
                 return;
             }
+            Log("Detection", $"Model loaded successfully. Execution provider: {_detectionService.ExecutionProvider}");
 
-            // Create and show overlay window
+            // Create and show overlay window, positioned on the same monitor as capture
             _overlayWindow = new OverlayWindow();
+            _overlayWindow.PositionOverMonitor(monitorIndex);
             _renderer = new OverlayRenderer(_overlayWindow.Canvas);
             _overlayWindow.Show();
+
+            Log("Overlay", $"Started on monitor {monitorIndex}, model: {_selectedGameProfile.ModelFile}");
 
             // Subscribe to frame capture events
             _captureService.FrameCaptured += OnFrameCaptured;
@@ -369,65 +408,174 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void StopOverlay()
     {
-        _hotkeyService?.Stop();
-        _hotkeyService = null;
-
-        if (_captureService != null)
+        try
         {
-            _captureService.FrameCaptured -= OnFrameCaptured;
-            _captureService.StopCapture();
-            _captureService.Dispose();
-            _captureService = null;
+            OverlayLogger.Log("StopOverlay", "Starting overlay shutdown...");
+            _stopping = true;
+
+            OverlayLogger.Log("StopOverlay", "Stopping hotkey service...");
+            _hotkeyService?.Stop();
+            _hotkeyService = null;
+
+            if (_captureService != null)
+            {
+                OverlayLogger.Log("StopOverlay", "Stopping capture service...");
+                _captureService.FrameCaptured -= OnFrameCaptured;
+                _captureService.StopCapture();
+                _captureService.Dispose();
+                _captureService = null;
+
+                // Wait briefly for any in-flight frame processing to complete
+                OverlayLogger.Log("StopOverlay", "Waiting for in-flight frames...");
+                Thread.Sleep(100);
+            }
+
+            OverlayLogger.Log("StopOverlay", "Disposing detection service...");
+            try
+            {
+                _detectionService?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                OverlayLogger.Log("StopOverlay", $"Detection service dispose error (ignored): {ex.Message}");
+            }
+            _detectionService = null;
+
+            OverlayLogger.Log("StopOverlay", "Closing overlay window...");
+            _overlayWindow?.Close();
+            _overlayWindow = null;
+            _renderer = null;
+
+            OverlayLogger.Log("StopOverlay", "Setting IsOverlayRunning to false...");
+            IsOverlayRunning = false;
+            _stopping = false;
+
+            OverlayLogger.Log("StopOverlay", "Overlay shutdown complete.");
         }
-
-        _detectionService?.Dispose();
-        _detectionService = null;
-
-        _overlayWindow?.Close();
-        _overlayWindow = null;
-        _renderer = null;
-
-        IsOverlayRunning = false;
+        catch (Exception ex)
+        {
+            OverlayLogger.Log("ERROR", $"Exception in StopOverlay: {ex.Message}\n{ex.StackTrace}");
+        }
     }
 
     private async void OnFrameCaptured(object? sender, CapturedFrame frame)
     {
-        if (_detectionService == null || _renderer == null || !_overlayVisible)
+        if (_stopping || _detectionService == null || _renderer == null || !_overlayVisible)
             return;
 
         try
         {
+            _frameCount++;
+            _framesProcessedSinceLastLog++;
+
+            // Track inference time
+            _inferenceStopwatch.Restart();
+
             // Use a very low base threshold, then filter by per-group confidence
             var detections = await _detectionService.DetectAsync(frame, 0.01f);
-            if (detections == null) return; // Skipped frame
+
+            _inferenceStopwatch.Stop();
+            var inferenceMs = _inferenceStopwatch.ElapsedMilliseconds;
+
+            // If frame was skipped (inference still running), check if we should clear stale overlay
+            if (detections == null)
+            {
+                var msSinceLastDetection = (DateTime.Now - _lastSuccessfulDetectionTime).TotalMilliseconds;
+                if (msSinceLastDetection > StaleOverlayTimeoutMs)
+                {
+                    _dispatcher.Invoke(() =>
+                    {
+                        if (_renderer != null)
+                            _renderer.Clear();
+                    });
+                }
+                return;
+            }
+
+            _lastSuccessfulDetectionTime = DateTime.Now;
+            _detectionCount = detections.Count;
+
+            // Calculate and log FPS every 5 seconds
+            var now = DateTime.Now;
+            var elapsed = (now - _lastFpsLogTime).TotalSeconds;
+            if (elapsed >= 5.0)
+            {
+                var fps = _framesProcessedSinceLastLog / elapsed;
+                Log("FPS", $"Overlay running at {fps:F1} FPS (inference: {inferenceMs}ms per frame)");
+                _framesProcessedSinceLastLog = 0;
+                _lastFpsLogTime = now;
+            }
+
+            // Log diagnostics every 30 frames
+            if (_frameCount % 30 == 1)
+            {
+                Log("Detection", $"Frame {_frameCount}: {detections.Count} detections, {_drawnCount} drawn last frame");
+                Log("Detection", $"Frame size: {frame.Width}x{frame.Height}");
+                Log("Detection", $"Configured groups: {OverlayGroups.Count}");
+                foreach (var g in OverlayGroups)
+                {
+                    Log("Detection", $"  Group '{g.Name}': labels=[{string.Join(", ", g.Labels)}], threshold={g.ConfidenceThreshold}");
+                }
+            }
 
             _dispatcher.Invoke(() =>
             {
+                // Check if overlay was stopped while we were processing
+                if (_renderer == null || _overlayWindow == null)
+                    return;
+
                 _renderer.Clear();
+                var drawnThisFrame = 0;
 
                 foreach (var detection in detections)
                 {
+                    // Log each detection for debugging
+                    if (_frameCount % 30 == 1)
+                    {
+                        Log("Detection", $"Found: label='{detection.Label}', conf={detection.Confidence:F3}, box=({detection.X1},{detection.Y1})-({detection.X2},{detection.Y2})");
+                    }
+
                     // Find matching group for this label
                     var group = OverlayGroups.FirstOrDefault(g =>
                         g.Labels.Contains(detection.Label, StringComparer.OrdinalIgnoreCase));
 
-                    // Check if detection meets the group's confidence threshold
-                    if (group != null && detection.Confidence >= group.ConfidenceThreshold)
+                    if (group == null)
                     {
-                        _renderer.DrawBox(
-                            detection.X1,
-                            detection.Y1,
-                            detection.Width,
-                            detection.Height,
-                            detection.Label,
-                            group);
+                        // No group configured for this label - log warning
+                        if (_frameCount % 30 == 1)
+                        {
+                            Log("WARNING", $"No group found for label '{detection.Label}' - detection will not be drawn!");
+                        }
+                        continue;
                     }
+
+                    // Check if detection meets the group's confidence threshold
+                    if (detection.Confidence < group.ConfidenceThreshold)
+                    {
+                        if (_frameCount % 30 == 1)
+                        {
+                            Log("Detection", $"Filtered: '{detection.Label}' conf={detection.Confidence:F3} < threshold={group.ConfidenceThreshold}");
+                        }
+                        continue;
+                    }
+
+                    _renderer.DrawBox(
+                        detection.X1,
+                        detection.Y1,
+                        detection.Width,
+                        detection.Height,
+                        detection.Label,
+                        group);
+                    drawnThisFrame++;
                 }
+
+                _drawnCount = drawnThisFrame;
             });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Detection error: {ex.Message}");
+            Log("ERROR", $"Detection error: {ex.Message}");
+            Log("ERROR", $"Stack trace: {ex.StackTrace}");
         }
     }
 
@@ -479,8 +627,20 @@ public class MainViewModel : INotifyPropertyChanged
 
     private void Close()
     {
-        StopOverlay();
+        Cleanup();
         _window.Close();
+        Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Cleans up all resources. Called when the window is closing.
+    /// </summary>
+    public void Cleanup()
+    {
+        if (IsOverlayRunning)
+        {
+            StopOverlay();
+        }
     }
 
     private void OpenGameSettings()

@@ -64,7 +64,7 @@ public class GdiCaptureService : IScreenCaptureService
     /// </summary>
     public void SetCaptureInterval(int intervalMs)
     {
-        _captureIntervalMs = Math.Max(50, intervalMs); // Minimum 50ms (~20 FPS max)
+        _captureIntervalMs = Math.Max(16, intervalMs); // Minimum 16ms (~60 FPS max)
     }
 
     public Task<bool> StartCaptureAsync()
