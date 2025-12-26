@@ -10,7 +10,9 @@ using GamingVision.Services.Hotkeys;
 using GamingVision.Services.Ocr;
 using GamingVision.Services.ScreenCapture;
 using GamingVision.Services.Tts;
+using GamingVision.Services.Training;
 using GamingVision.Utilities;
+using GamingVision.Views;
 using GamingVision.Windows;
 
 namespace GamingVision.ViewModels;
@@ -40,6 +42,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _overlayVisible = true;
     private volatile bool _stoppingOverlay;
 
+    // Training fields
+    private TrainingDataManager? _trainingDataManager;
+    private int _trainingCaptureCount;
+
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
 
@@ -54,6 +60,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isOverlayEnabled;
+
+    [ObservableProperty]
+    private bool _isTrainingEnabled = true;
+
+    [ObservableProperty]
+    private string _trainingDataPath = string.Empty;
+
+    [ObservableProperty]
+    private string _trainingCaptureHotkey = "F1";
+
+    [ObservableProperty]
+    private string _trainingStatus = string.Empty;
 
     [ObservableProperty]
     private string _detectionStatus = "Stopped";
@@ -168,6 +186,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _hotkeyService.RegisterHotkey(HotkeyId.ToggleDetection, profile.Hotkeys.ToggleDetection);
         _hotkeyService.RegisterHotkey(HotkeyId.Quit, profile.Hotkeys.Quit);
 
+        // Register training capture hotkey
+        var trainingHotkey = profile.Training?.CaptureHotkey ?? "F1";
+        _hotkeyService.RegisterHotkey(HotkeyId.CaptureTraining, trainingHotkey);
+
         Logger.Log("Hotkeys registered");
     }
 
@@ -204,6 +226,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 case HotkeyId.Quit:
                     QuitApplication();
+                    break;
+
+                case HotkeyId.CaptureTraining:
+                    await CaptureTrainingScreenshotAsync();
                     break;
             }
         }
@@ -563,6 +589,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         UpdateHotkeyDisplay();
         RegisterHotkeys(); // Re-register hotkeys for the new game profile
         LoadOverlaySettings(); // Load overlay settings for the new game profile
+        LoadTrainingSettings(); // Load training settings for the new game profile
 
         // Save the selection
         Task.Run(async () => await _configManager.SaveAppSettingsAsync(_appConfig));
@@ -696,6 +723,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _frameCount = 0;
             _detectionCount = 0;
             CurrentDetectionCount = 0;
+
+            // Initialize training data manager
+            InitializeTrainingDataManager(profile);
 
             // Enable features based on saved settings
             if (IsScreenReaderEnabled)
@@ -1312,6 +1342,244 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Save setting
         _appConfig.OverlayEnabled = value;
         _ = _configManager.SaveAppSettingsAsync(_appConfig);
+    }
+
+    #endregion
+
+    #region Training Commands
+
+    [RelayCommand]
+    private async Task CreateNewTrainingProfileAsync()
+    {
+        // Stop engine before creating new profile
+        var wasRunning = IsEngineRunning;
+        if (wasRunning)
+        {
+            StopEngine();
+        }
+
+        var createWindow = new CreateProfileWindow(_configManager);
+        createWindow.Owner = System.Windows.Application.Current.MainWindow;
+
+        if (createWindow.ShowDialog() == true && createWindow.CreatedProfile != null)
+        {
+            // Reload profiles to include the new one
+            await _configManager.LoadAllGameProfilesAsync();
+            LoadGames();
+
+            // Select the newly created profile
+            SelectedGame = Games.FirstOrDefault(g => g.Key == createWindow.CreatedProfile.GameId);
+
+            Logger.Log($"New profile created and selected: {createWindow.CreatedProfile.DisplayName}");
+        }
+
+        // Restart engine if it was running
+        if (wasRunning && SelectedGame != null)
+        {
+            await StartEngineAsync();
+        }
+    }
+
+    [RelayCommand]
+    private void BrowseTrainingFolder()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Select Training Data Folder",
+            ShowNewFolderButton = true,
+            SelectedPath = GetTrainingDataRoot(profile)
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            TrainingDataPath = dialog.SelectedPath;
+
+            // Update profile and save
+            profile.Training ??= new TrainingSettings();
+            profile.Training.DataPath = dialog.SelectedPath;
+            Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
+
+            // Reinitialize training data manager with new path
+            InitializeTrainingDataManager(profile);
+        }
+    }
+
+    /// <summary>
+    /// Captures a training screenshot with auto-annotation.
+    /// </summary>
+    private async Task CaptureTrainingScreenshotAsync()
+    {
+        if (!IsEngineRunning)
+        {
+            Logger.Log("Training capture: Engine not running");
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        if (!IsTrainingEnabled)
+        {
+            Logger.Log("Training capture: Training disabled");
+            return;
+        }
+
+        if (_captureManager == null || _trainingDataManager == null)
+        {
+            Logger.Warn("Training capture: Manager not initialized");
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        try
+        {
+            // Use CaptureFrame which uses PrintWindow to avoid capturing overlays
+            var frame = _captureManager.CaptureFrame();
+            if (frame == null)
+            {
+                Logger.Error("Training capture: Failed to capture frame");
+                System.Media.SystemSounds.Beep.Play();
+                return;
+            }
+
+            try
+            {
+                var filename = _trainingDataManager.GetNextFilename();
+                List<DetectedObject> detections = [];
+
+                // Run detection if model is loaded
+                var detectionService = _detectionManager?.DetectionService;
+                if (detectionService != null && detectionService.IsReady)
+                {
+                    var profile = GetSelectedGameProfile();
+                    var threshold = profile?.Training?.AnnotationConfidenceThreshold ?? 0.3f;
+                    detections = await detectionService.DetectAsync(frame, threshold) ?? [];
+                }
+
+                // Save screenshot
+                _trainingDataManager.SaveScreenshot(frame, filename);
+
+                // Save annotations if detections found
+                if (detections.Count > 0 && _detectionManager?.DetectionService != null)
+                {
+                    var labels = _detectionManager.DetectionService.Labels;
+                    _trainingDataManager.SaveAnnotations(detections, filename, frame.Width, frame.Height, labels);
+                }
+
+                _trainingCaptureCount++;
+
+                // Update UI with status
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    TrainingStatus = $"Captured: {filename} ({detections.Count} detections)";
+                });
+
+                Logger.Log($"Training capture: {filename} - {detections.Count} detections");
+
+                // Play a subtle sound to confirm capture
+                System.Media.SystemSounds.Asterisk.Play();
+            }
+            finally
+            {
+                frame.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Training capture error", ex);
+            System.Media.SystemSounds.Beep.Play();
+        }
+    }
+
+    /// <summary>
+    /// Gets the training data root path for a profile.
+    /// </summary>
+    private string GetTrainingDataRoot(GameProfile profile)
+    {
+        if (!string.IsNullOrEmpty(profile.Training?.DataPath))
+        {
+            return profile.Training.DataPath;
+        }
+
+        return Path.Combine(TrainingDataManager.GetDefaultTrainingDataRoot(), profile.GameId);
+    }
+
+    /// <summary>
+    /// Initializes the training data manager for a profile.
+    /// </summary>
+    private void InitializeTrainingDataManager(GameProfile profile)
+    {
+        var trainingRoot = string.IsNullOrEmpty(profile.Training?.DataPath)
+            ? TrainingDataManager.GetDefaultTrainingDataRoot()
+            : Path.GetDirectoryName(profile.Training.DataPath) ?? TrainingDataManager.GetDefaultTrainingDataRoot();
+
+        var gameFolder = string.IsNullOrEmpty(profile.Training?.DataPath)
+            ? profile.GameId
+            : Path.GetFileName(profile.Training.DataPath);
+
+        _trainingDataManager = new TrainingDataManager(trainingRoot, string.IsNullOrEmpty(gameFolder) ? profile.GameId : gameFolder);
+        _trainingDataManager.Initialize();
+
+        // Save classes.txt if model is loaded
+        if (_detectionManager?.DetectionService != null && _detectionManager.DetectionService.Labels.Count > 0)
+        {
+            _trainingDataManager.SaveClasses(_detectionManager.DetectionService.Labels);
+        }
+
+        Logger.Log($"Training data manager initialized: {_trainingDataManager.ImagesPath}");
+    }
+
+    /// <summary>
+    /// Loads training settings from the current game profile.
+    /// </summary>
+    private void LoadTrainingSettings()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        IsTrainingEnabled = profile.Training?.Enabled ?? true;
+        TrainingCaptureHotkey = profile.Training?.CaptureHotkey ?? "F1";
+        TrainingDataPath = GetTrainingDataRoot(profile);
+        _trainingCaptureCount = 0;
+        UpdateTrainingStatus();
+    }
+
+    /// <summary>
+    /// Updates the training status message based on current state.
+    /// </summary>
+    private void UpdateTrainingStatus()
+    {
+        if (!IsTrainingEnabled)
+        {
+            TrainingStatus = "Training Disabled";
+        }
+        else if (!IsEngineRunning)
+        {
+            TrainingStatus = "Training Inactive - Start Engine";
+        }
+        else
+        {
+            TrainingStatus = $"Ready - Press {TrainingCaptureHotkey} to capture";
+        }
+    }
+
+    partial void OnIsTrainingEnabledChanged(bool value)
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Update and save profile
+        profile.Training ??= new TrainingSettings();
+        profile.Training.Enabled = value;
+        Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
+
+        UpdateTrainingStatus();
+    }
+
+    partial void OnIsEngineRunningChanged(bool value)
+    {
+        UpdateTrainingStatus();
     }
 
     #endregion

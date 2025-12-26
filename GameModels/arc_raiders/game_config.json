@@ -2,7 +2,7 @@
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
   "modelFile": "ArcRaidersModel_v20251225_205936_640.onnx",
-  "windowTitle": "ARC Raiders",
+  "windowTitle": "\u200B\uFEFFA\uFEFFRC\u2005\u200B\u200B\u200B\uFEFFR\uFEFF\uFEFF\uFEFF\u200B\u200Ba\u200B\u200Bi\u200B\u200B\u200B\u200B\u200Bde\u200Brs",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -70,7 +70,7 @@
     "quit": "Alt+Q"
   },
   "capture": {
-    "method": "fullscreen",
+    "method": "window",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,

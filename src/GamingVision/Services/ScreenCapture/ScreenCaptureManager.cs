@@ -107,6 +107,15 @@ public class ScreenCaptureManager : IDisposable
     }
 
     /// <summary>
+    /// Captures a single frame synchronously using PrintWindow (bypasses overlays).
+    /// Use this for training data capture to avoid capturing bounding box overlays.
+    /// </summary>
+    public CapturedFrame? CaptureFrame()
+    {
+        return _captureService?.CaptureFrame();
+    }
+
+    /// <summary>
     /// Tries to find the game window again (useful if the game was launched after initialization).
     /// </summary>
     public bool TryFindWindow()

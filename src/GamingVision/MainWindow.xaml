@@ -34,15 +34,32 @@
 
         <!-- Game Selection and Engine Control (shared across tabs) -->
         <GroupBox Grid.Row="0" Header="Select Game">
-            <StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
                 <ComboBox x:Name="GameComboBox"
+                          Grid.Row="0" Grid.Column="0"
                           ItemsSource="{Binding Games}"
                           SelectedItem="{Binding SelectedGame}"
                           DisplayMemberPath="DisplayName"
                           AutomationProperties.Name="Game Selection"
                           AutomationProperties.HelpText="Select the game you want to play with accessibility features"/>
 
-                <Button Command="{Binding ToggleEngineCommand}"
+                <Button Grid.Row="0" Grid.Column="1"
+                        Content="GAME SETTINGS"
+                        Command="{Binding OpenGameSettingsCommand}"
+                        Margin="10,0,0,0"
+                        AutomationProperties.Name="Open Game Settings"/>
+
+                <Button Grid.Row="1" Grid.ColumnSpan="2"
+                        Command="{Binding ToggleEngineCommand}"
                         HorizontalAlignment="Center"
                         Margin="0,10,0,0"
                         FontWeight="Bold"
@@ -66,7 +83,7 @@
                         </Style>
                     </Button.Style>
                 </Button>
-            </StackPanel>
+            </Grid>
         </GroupBox>
 
         <!-- Tab Control -->
@@ -81,18 +98,14 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Enable Screen Reader Checkbox and Game Settings -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
-                        <CheckBox Content="Enable Screen Reader"
-                                  IsChecked="{Binding IsScreenReaderEnabled}"
-                                  VerticalAlignment="Center"
-                                  FontWeight="Bold"
-                                  AutomationProperties.Name="Enable Screen Reader"/>
-                        <Button Content="GAME SETTINGS"
-                                Command="{Binding OpenGameSettingsCommand}"
-                                Margin="15,0,0,0"
-                                AutomationProperties.Name="Open Game Settings"/>
-                    </StackPanel>
+                    <!-- Enable Screen Reader Checkbox -->
+                    <CheckBox Grid.Row="0"
+                              Content="Enable Screen Reader"
+                              IsChecked="{Binding IsScreenReaderEnabled}"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,15"
+                              FontWeight="Bold"
+                              AutomationProperties.Name="Enable Screen Reader"/>
 
                     <!-- Status -->
                     <GroupBox Grid.Row="1" Header="Status">
@@ -309,6 +322,139 @@
                         <TextBlock Text="Note: For best compatibility, use borderless windowed mode in your game."
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    TextWrapping="Wrap"/>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- Training Tab -->
+            <TabItem Header="Training">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Enable Training Checkbox and Create New -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
+                        <CheckBox Content="Enable screenshots for training"
+                                  IsChecked="{Binding IsTrainingEnabled}"
+                                  VerticalAlignment="Center"
+                                  FontWeight="Bold"
+                                  AutomationProperties.Name="Enable Training Screenshots"
+                                  AutomationProperties.HelpText="When enabled, press the capture hotkey to save screenshots for model training"/>
+                        <Button Content="CREATE NEW"
+                                Command="{Binding CreateNewTrainingProfileCommand}"
+                                Margin="15,0,0,0"
+                                AutomationProperties.Name="Create New Training Profile"
+                                AutomationProperties.HelpText="Create a new game profile for training data collection"/>
+                    </StackPanel>
+
+                    <!-- Training Data Location -->
+                    <GroupBox Grid.Row="1" Header="Training Data Save Location">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding TrainingDataPath, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     VerticalAlignment="Center"
+                                     AutomationProperties.Name="Training Data Folder Path"
+                                     AutomationProperties.HelpText="The folder where training screenshots will be saved"/>
+                            <Button Grid.Column="1"
+                                    Content="Browse..."
+                                    Command="{Binding BrowseTrainingFolderCommand}"
+                                    Margin="10,0,0,0"
+                                    MinWidth="80"
+                                    AutomationProperties.Name="Browse for Training Folder"/>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Capture Hotkey -->
+                    <GroupBox Grid.Row="2" Header="Capture Settings">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Capture Hotkey:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding TrainingCaptureHotkey, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     MaxWidth="100"
+                                     HorizontalAlignment="Left"
+                                     AutomationProperties.Name="Capture Screenshot Hotkey"
+                                     AutomationProperties.HelpText="Press this key to capture a screenshot when training mode is enabled"/>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Training Status -->
+                    <Border Grid.Row="3"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10,5"
+                            Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Ellipse Width="12" Height="12" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#666666"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
+                                                    <Condition Binding="{Binding IsTrainingEnabled}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Fill" Value="#00FF00"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Text="{Binding TrainingStatus, FallbackValue='Training Inactive - Start Engine', TargetNullValue='Training Inactive - Start Engine'}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
+                                                    <Condition Binding="{Binding IsTrainingEnabled}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Foreground" Value="#00FF00"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Info Note -->
+                    <Border Grid.Row="4"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10"
+                            Margin="0,10,0,0"
+                            VerticalAlignment="Top">
+                        <StackPanel>
+                            <TextBlock Text="Training Mode"
+                                       FontWeight="Bold"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SecondaryTextBrush}">
+                                <Run Text="When enabled, pressing the capture hotkey will save a screenshot of the game window to the training data folder. If a model is loaded, detections will be auto-annotated. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
+                            </TextBlock>
+                        </StackPanel>
                     </Border>
                 </Grid>
             </TabItem>

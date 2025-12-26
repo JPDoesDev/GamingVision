@@ -61,7 +61,8 @@ public enum HotkeyId
     ReadTertiary = 3,
     StopReading = 4,
     ToggleDetection = 5,
-    Quit = 6
+    Quit = 6,
+    CaptureTraining = 7
 }
 
 /// <summary>

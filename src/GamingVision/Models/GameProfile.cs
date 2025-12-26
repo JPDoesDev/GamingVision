@@ -79,6 +79,11 @@ public class GameProfile
     public OverlaySettings? Overlay { get; set; }
 
     /// <summary>
+    /// Training data collection settings.
+    /// </summary>
+    public TrainingSettings? Training { get; set; }
+
+    /// <summary>
     /// Creates a deep copy of this game profile.
     /// </summary>
     public GameProfile Clone() => new()
@@ -96,6 +101,7 @@ public class GameProfile
         Capture = Capture.Clone(),
         Tts = Tts.Clone(),
         Detection = Detection.Clone(),
-        Overlay = Overlay?.Clone()
+        Overlay = Overlay?.Clone(),
+        Training = Training?.Clone()
     };
 }
