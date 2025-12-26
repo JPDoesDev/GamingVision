@@ -36,21 +36,6 @@ public partial class GameSettingsWindow : Window
         Close();
     }
 
-    private void PickWindowButton_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new WindowPickerDialog(
-            _viewModel.GetAvailableWindows(),
-            () => _viewModel.GetAvailableWindows())
-        {
-            Owner = this
-        };
-
-        if (dialog.ShowDialog() == true && dialog.SelectedWindow != null)
-        {
-            _viewModel.SetWindowTitle(dialog.SelectedWindow.Title);
-        }
-    }
-
     private void ConfigurePrimaryButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.OpenLabelConfiguration("Primary", this);

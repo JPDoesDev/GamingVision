@@ -32,15 +32,18 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<string> _captureMethodOptions = ["window", "fullscreen"];
 
+    [ObservableProperty]
+    private ObservableCollection<string> _availableWindows = [];
+
+    [ObservableProperty]
+    private string _selectedWindow = "";
+
     // Game profile settings
     [ObservableProperty]
     private string _displayName = "";
 
     [ObservableProperty]
     private string _modelFile = "";
-
-    [ObservableProperty]
-    private string _windowTitle = "";
 
     // Label lists (internal storage)
     private List<string> _primaryLabelsList = [];
@@ -203,7 +206,10 @@ public partial class GameSettingsViewModel : ObservableObject
         // Game profile basics
         DisplayName = _currentProfile.DisplayName;
         ModelFile = _currentProfile.ModelFile;
-        WindowTitle = _currentProfile.WindowTitle;
+
+        // Refresh available windows and set the selected one
+        RefreshAvailableWindows();
+        SelectedWindow = _currentProfile.WindowTitle;
 
         // Load label lists
         _primaryLabelsList = [.. _currentProfile.PrimaryLabels];
@@ -256,7 +262,7 @@ public partial class GameSettingsViewModel : ObservableObject
         // Game profile basics
         _currentProfile.DisplayName = DisplayName;
         _currentProfile.ModelFile = ModelFile;
-        _currentProfile.WindowTitle = WindowTitle;
+        _currentProfile.WindowTitle = SelectedWindow;
         _currentProfile.PrimaryLabels = [.. _primaryLabelsList];
         _currentProfile.SecondaryLabels = [.. _secondaryLabelsList];
         _currentProfile.TertiaryLabels = [.. _tertiaryLabelsList];
@@ -479,6 +485,36 @@ public partial class GameSettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Refreshes the list of available windows for the dropdown.
+    /// </summary>
+    [RelayCommand]
+    private void RefreshAvailableWindows()
+    {
+        var currentSelection = SelectedWindow;
+        AvailableWindows.Clear();
+
+        // Add empty option for no window selected
+        AvailableWindows.Add("");
+
+        foreach (var window in GetAvailableWindows())
+        {
+            AvailableWindows.Add(window.Title);
+        }
+
+        // Restore selection if it still exists, otherwise keep empty
+        if (!string.IsNullOrEmpty(currentSelection) && AvailableWindows.Contains(currentSelection))
+        {
+            SelectedWindow = currentSelection;
+        }
+        else if (!string.IsNullOrEmpty(currentSelection))
+        {
+            // Window not found but had a value - add it anyway so user can see what was configured
+            AvailableWindows.Add(currentSelection);
+            SelectedWindow = currentSelection;
+        }
+    }
+
+    /// <summary>
     /// Gets available windows for window picker.
     /// </summary>
     public List<WindowInfo> GetAvailableWindows()
@@ -504,14 +540,6 @@ public partial class GameSettingsViewModel : ObservableObject
         }, IntPtr.Zero);
 
         return windows.OrderBy(w => w.Title).ToList();
-    }
-
-    /// <summary>
-    /// Sets the window title from a selected window.
-    /// </summary>
-    public void SetWindowTitle(string title)
-    {
-        WindowTitle = title;
     }
 
     #region Win32 API for Window Enumeration

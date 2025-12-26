@@ -16,7 +16,7 @@ public static class WindowFinder
     public static IntPtr FindWindowByTitle(string partialTitle)
     {
         IntPtr foundWindow = IntPtr.Zero;
-        string searchTitle = partialTitle.ToLowerInvariant();
+        string searchTitle = StripInvisibleChars(partialTitle).ToLowerInvariant();
 
         User32.EnumWindows((hWnd, lParam) =>
         {
@@ -27,7 +27,9 @@ public static class WindowFinder
             if (string.IsNullOrEmpty(title))
                 return true;
 
-            if (title.ToLowerInvariant().Contains(searchTitle))
+            // Strip invisible Unicode chars for robust matching
+            var cleanTitle = StripInvisibleChars(title).ToLowerInvariant();
+            if (cleanTitle.Contains(searchTitle))
             {
                 foundWindow = hWnd;
                 return false; // Stop enumeration
@@ -37,6 +39,33 @@ public static class WindowFinder
         }, IntPtr.Zero);
 
         return foundWindow;
+    }
+
+    /// <summary>
+    /// Strips invisible Unicode characters (zero-width spaces, BOM, etc.) from a string.
+    /// Some games use these in window titles as anti-bot measures.
+    /// </summary>
+    private static string StripInvisibleChars(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var sb = new StringBuilder(input.Length);
+        foreach (var c in input)
+        {
+            // Skip zero-width and formatting characters
+            if (c == '\u200B' || // Zero-width space
+                c == '\u200C' || // Zero-width non-joiner
+                c == '\u200D' || // Zero-width joiner
+                c == '\uFEFF' || // Byte order mark / zero-width no-break space
+                c == '\u00AD' || // Soft hyphen
+                c == '\u2060')   // Word joiner
+            {
+                continue;
+            }
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     /// <summary>

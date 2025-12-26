@@ -161,10 +161,8 @@ public class WindowsCaptureService : IScreenCaptureService
 
         _captureWindow = true;
 
-        if (!_useWgc)
-        {
-            return _fallbackService.InitializeForWindowTitle(windowTitle);
-        }
+        // Always initialize fallback service for CaptureFrame() support
+        _fallbackService.InitializeForWindowTitle(windowTitle);
 
         return true;
     }
@@ -177,10 +175,8 @@ public class WindowsCaptureService : IScreenCaptureService
         _targetWindow = windowHandle;
         _captureWindow = true;
 
-        if (!_useWgc)
-        {
-            _fallbackService.InitializeForWindow(windowHandle);
-        }
+        // Always initialize fallback service for CaptureFrame() support
+        _fallbackService.InitializeForWindow(windowHandle);
     }
 
     /// <summary>
@@ -194,10 +190,8 @@ public class WindowsCaptureService : IScreenCaptureService
         // Get HMONITOR for the specified index
         _targetMonitor = GetMonitorHandle(monitorIndex);
 
-        if (!_useWgc)
-        {
-            _fallbackService.InitializeForMonitor(monitorIndex);
-        }
+        // Always initialize fallback service for CaptureFrame() support
+        _fallbackService.InitializeForMonitor(monitorIndex);
     }
 
     /// <summary>
@@ -556,6 +550,17 @@ public class WindowsCaptureService : IScreenCaptureService
         {
             return _latestFrame;
         }
+    }
+
+    /// <summary>
+    /// Captures a single frame immediately.
+    /// Uses the GDI fallback service for synchronous capture.
+    /// </summary>
+    public CapturedFrame? CaptureFrame()
+    {
+        // For synchronous single-shot capture, use the GDI fallback
+        // WGC uses an async frame pool model that doesn't support sync capture well
+        return _fallbackService.CaptureFrame();
     }
 
     private void CleanupWgcResources()

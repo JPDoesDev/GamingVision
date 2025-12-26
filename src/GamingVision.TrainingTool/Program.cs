@@ -293,9 +293,34 @@ class Program
             }
         }
 
-        // Initialize screen capture (fullscreen, primary monitor)
-        var captureService = new GdiCaptureService();
-        captureService.InitializeForMonitor(0);
+        // Initialize screen capture using WGC (Windows.Graphics.Capture) for overlay exclusion
+        // WGC captures window content directly, bypassing any overlays drawn on screen
+        var captureService = new WindowsCaptureService();
+        bool windowCaptureEnabled = false;
+
+        if (!string.IsNullOrWhiteSpace(profile.WindowTitle))
+        {
+            windowCaptureEnabled = captureService.InitializeForWindowTitle(profile.WindowTitle);
+            if (!windowCaptureEnabled)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"Warning: Window '{profile.WindowTitle}' not found. Using fullscreen capture.");
+                Console.WriteLine("Note: Fullscreen capture may include overlay bounding boxes in screenshots.");
+                Console.ResetColor();
+                Console.WriteLine();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Window capture enabled: '{profile.WindowTitle}' (overlays excluded)");
+                Console.ResetColor();
+            }
+        }
+
+        if (!windowCaptureEnabled)
+        {
+            captureService.InitializeForMonitor(profile.Capture?.MonitorIndex ?? 0);
+        }
 
         // Print session info
         Console.Clear();
@@ -318,6 +343,19 @@ class Program
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Not available (screenshots only)");
+        }
+        Console.ResetColor();
+
+        Console.Write("Capture: ");
+        if (windowCaptureEnabled)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"Window '{profile.WindowTitle}' (overlay excluded)");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"Fullscreen monitor {profile.Capture?.MonitorIndex ?? 0} (may include overlay)");
         }
         Console.ResetColor();
 
@@ -401,7 +439,7 @@ class Program
     /// Captures a screenshot and returns 1 if successful, 0 otherwise.
     /// </summary>
     static async Task<int> CaptureScreenshot(
-        GdiCaptureService captureService,
+        IScreenCaptureService captureService,
         YoloDetectionService? detectionService,
         TrainingDataManager trainingDataManager,
         IReadOnlyList<string> labels,

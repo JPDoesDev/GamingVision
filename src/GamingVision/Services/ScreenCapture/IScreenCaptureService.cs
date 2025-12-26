@@ -28,6 +28,13 @@ public interface IScreenCaptureService : IDisposable
     CapturedFrame? GetLatestFrame();
 
     /// <summary>
+    /// Captures a single frame immediately (synchronous).
+    /// For WGC, this uses GDI fallback for single-shot capture.
+    /// </summary>
+    /// <returns>Captured frame or null if capture failed.</returns>
+    CapturedFrame? CaptureFrame();
+
+    /// <summary>
     /// Event raised when a new frame is captured.
     /// </summary>
     event EventHandler<CapturedFrame>? FrameCaptured;

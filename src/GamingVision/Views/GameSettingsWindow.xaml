@@ -59,7 +59,6 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Display Name:" VerticalAlignment="Center" Margin="0,8"/>
@@ -75,36 +74,28 @@
                                 Command="{Binding BrowseForModelCommand}"
                                 AutomationProperties.Name="Browse for Model File"/>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Window Title:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" Margin="15,5"
-                                 Text="{Binding WindowTitle, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Game Window Title"/>
-                        <Button Grid.Row="2" Grid.Column="2" Content="Pick..."
-                                x:Name="PickWindowButton" Click="PickWindowButton_Click"
-                                AutomationProperties.Name="Pick Window from Running Applications"/>
-
                         <!-- Detection Label Configuration -->
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Primary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PrimaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Primary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PrimaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Primary Labels Summary"/>
-                        <Button Grid.Row="3" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="2" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigurePrimaryButton" Click="ConfigurePrimaryButton_Click"
                                 AutomationProperties.Name="Configure Primary Detection Labels"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SecondaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Secondary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SecondaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Secondary Labels Summary"/>
-                        <Button Grid.Row="4" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="3" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigureSecondaryButton" Click="ConfigureSecondaryButton_Click"
                                 AutomationProperties.Name="Configure Secondary Detection Labels"/>
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Tertiary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TertiaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Tertiary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TertiaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Tertiary Labels Summary"/>
-                        <Button Grid.Row="5" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="4" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigureTertiaryButton" Click="ConfigureTertiaryButton_Click"
                                 AutomationProperties.Name="Configure Tertiary Detection Labels"/>
                     </Grid>
@@ -118,14 +109,27 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Method:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Target Window:" VerticalAlignment="Center" Margin="0,8"/>
                         <ComboBox Grid.Row="0" Grid.Column="1" Margin="15,5"
+                                  ItemsSource="{Binding AvailableWindows}"
+                                  SelectedItem="{Binding SelectedWindow}"
+                                  IsEditable="True"
+                                  AutomationProperties.Name="Target Window Selection"
+                                  AutomationProperties.HelpText="Select the game window to capture"/>
+                        <Button Grid.Row="0" Grid.Column="2" Content="Refresh"
+                                Command="{Binding RefreshAvailableWindowsCommand}"
+                                AutomationProperties.Name="Refresh Window List"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Method:" VerticalAlignment="Center" Margin="0,8"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
                                   SelectedValue="{Binding CaptureMethod}"
                                   SelectedValuePath="Tag"
                                   AutomationProperties.Name="Capture Method">
@@ -133,8 +137,8 @@
                             <ComboBoxItem Content="Full Screen" Tag="fullscreen"/>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Monitor:" VerticalAlignment="Center" Margin="0,8"/>
-                        <ComboBox Grid.Row="1" Grid.Column="1" Margin="15,5"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Monitor:" VerticalAlignment="Center" Margin="0,8"/>
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="15,5"
                                   SelectedIndex="{Binding MonitorIndex}"
                                   AutomationProperties.Name="Monitor Selection">
                             <ComboBoxItem Content="Primary Monitor"/>

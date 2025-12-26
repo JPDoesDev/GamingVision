@@ -51,6 +51,30 @@
     {
       "name": "hud-timeleft",
       "description": "Hud timer for time left in the map"
+    },
+    {
+      "name": "arc-wasp",
+      "description": "ARC enemy: Wasp"
+    },
+    {
+      "name": "arc-rocket",
+      "description": "ARC enemy: Rocket"
+    },
+    {
+      "name": "arc-pop",
+      "description": "ARC enemy: Pop"
+    },
+    {
+      "name": "arc-fireball",
+      "description": "ARC enemy: Fireball"
+    },
+    {
+      "name": "arc-tick",
+      "description": "ARC enemy: Tick"
+    },
+    {
+      "name": "arc-spider",
+      "description": "ARC enemy: Spider"
     }
   ],
   "hotkeys": {

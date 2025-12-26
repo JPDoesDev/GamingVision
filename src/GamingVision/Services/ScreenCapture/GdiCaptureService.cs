@@ -158,28 +158,123 @@ public class GdiCaptureService : IScreenCaptureService
     /// </summary>
     public CapturedFrame? CaptureFrame()
     {
-        Rectangle bounds;
-
         if (_captureWindow)
         {
             if (_windowHandle == IntPtr.Zero)
                 return null;
 
-            if (!User32.GetWindowRect(_windowHandle, out var rect))
-                return null;
-
-            bounds = new Rectangle(rect.Left, rect.Top, rect.Width, rect.Height);
+            // Use PrintWindow to capture window content directly (bypasses overlays)
+            return CaptureWindowDirect(_windowHandle);
         }
         else
         {
-            bounds = GetMonitorBounds(_monitorIndex);
+            var bounds = GetMonitorBounds(_monitorIndex);
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return null;
+
+            return CaptureRegion(bounds);
         }
-
-        if (bounds.Width <= 0 || bounds.Height <= 0)
-            return null;
-
-        return CaptureRegion(bounds);
     }
+
+    /// <summary>
+    /// Captures a window's content directly using PrintWindow API.
+    /// This bypasses any overlays or other windows on top.
+    /// </summary>
+    private static CapturedFrame? CaptureWindowDirect(IntPtr hWnd)
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+
+            if (!User32.GetWindowRect(hWnd, out var rect))
+                return null;
+
+            int width = rect.Width;
+            int height = rect.Height;
+
+            if (width <= 0 || height <= 0)
+                return null;
+
+            using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            using var graphics = Graphics.FromImage(bitmap);
+            var allocMs = sw.ElapsedMilliseconds;
+            sw.Restart();
+
+            // Get device context for the bitmap
+            IntPtr hdcBitmap = graphics.GetHdc();
+            try
+            {
+                // PrintWindow captures the window content directly, ignoring overlays
+                // PW_RENDERFULLCONTENT (0x2) ensures we get the full content even for layered windows
+                const uint PW_RENDERFULLCONTENT = 0x2;
+                bool success = PrintWindow(hWnd, hdcBitmap, PW_RENDERFULLCONTENT);
+
+                if (!success)
+                {
+                    // Fallback to basic PrintWindow if PW_RENDERFULLCONTENT fails
+                    success = PrintWindow(hWnd, hdcBitmap, 0);
+                }
+
+                if (!success)
+                {
+                    Logger.Warn("PrintWindow failed, falling back to screen capture");
+                    graphics.ReleaseHdc(hdcBitmap);
+                    // Fallback to CopyFromScreen
+                    graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
+                }
+            }
+            finally
+            {
+                if (hdcBitmap != IntPtr.Zero)
+                {
+                    try { graphics.ReleaseHdc(hdcBitmap); } catch { }
+                }
+            }
+
+            var captureMs = sw.ElapsedMilliseconds;
+            sw.Restart();
+
+            // Convert bitmap to byte array
+            var bitmapData = bitmap.LockBits(
+                new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format32bppArgb);
+
+            try
+            {
+                int stride = bitmapData.Stride;
+                int size = stride * bitmap.Height;
+                var data = new byte[size];
+
+                Marshal.Copy(bitmapData.Scan0, data, 0, size);
+                var copyMs = sw.ElapsedMilliseconds;
+
+                var totalMs = allocMs + captureMs + copyMs;
+                Logger.Log($"[PERF] Capture (PrintWindow): alloc={allocMs}ms, capture={captureMs}ms, copy={copyMs}ms, TOTAL={totalMs}ms | {width}x{height}");
+
+                return new CapturedFrame
+                {
+                    Data = data,
+                    Width = bitmap.Width,
+                    Height = bitmap.Height,
+                    Stride = stride,
+                    Timestamp = DateTime.UtcNow
+                };
+            }
+            finally
+            {
+                bitmap.UnlockBits(bitmapData);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error capturing window: {ex.Message}");
+            return null;
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
 
     private static CapturedFrame? CaptureRegion(Rectangle bounds)
     {
