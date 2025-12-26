@@ -8,7 +8,9 @@
         MinWidth="450"
         MinHeight="910"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResizeWithGrip">
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Overlay Group Editor Window">
     <Window.Resources>
         <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter"/>
     </Window.Resources>

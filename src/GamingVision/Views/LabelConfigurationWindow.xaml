@@ -61,8 +61,8 @@
                                            AutomationProperties.Name="Label Name"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                                            Text="{Binding Description}"
-                                           Foreground="Gray"
-                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           FontSize="12"
                                            AutomationProperties.Name="Label Description"/>
                             </Grid>
                         </DataTemplate>
@@ -100,8 +100,8 @@
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                                <TextBlock Text=" - " Foreground="Gray"/>
-                                <TextBlock Text="{Binding Description}" Foreground="Gray"/>
+                                <TextBlock Text=" - " Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                <TextBlock Text="{Binding Description}" Foreground="{DynamicResource SecondaryTextBrush}"/>
                             </StackPanel>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>

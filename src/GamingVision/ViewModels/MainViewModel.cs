@@ -1101,10 +1101,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _overlayWindow = new OverlayWindow();
         _overlayRenderer = new OverlayRenderer(_overlayWindow.Canvas);
 
-        // Position on correct monitor
+        // Position on correct monitor (this calculates DPI scale)
         var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
         _overlayWindow.PositionOverMonitor(monitorIndex);
         _overlayWindow.Show();
+
+        // Pass DPI scale to renderer for correct coordinate conversion
+        // Must be done after Show() to ensure DPI is properly detected
+        _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
+        Logger.Log($"Overlay DPI scale set to {_overlayWindow.DpiScale:F2} ({_overlayWindow.DpiScale * 100:F0}%)");
 
         // Register overlay hotkey
         var hotkey = profile.Overlay?.ToggleHotkey ?? "Alt+O";

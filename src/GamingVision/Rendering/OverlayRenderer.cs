@@ -23,6 +23,13 @@ public class OverlayRenderer
     private readonly Typeface _labelTypeface = new("Segoe UI");
     private readonly double _pixelsPerDip;
 
+    /// <summary>
+    /// DPI scale factor used to convert physical pixel coordinates to WPF DIPs.
+    /// Set this before calling DrawAll to ensure proper coordinate alignment.
+    /// Default is 1.0 (100% scaling / 96 DPI).
+    /// </summary>
+    public double DpiScale { get; set; } = 1.0;
+
     // Pre-cached brushes for common colors
     private static readonly SolidColorBrush BlackBgBrush;
     private static readonly SolidColorBrush WhiteBgBrush;
@@ -79,22 +86,33 @@ public class OverlayRenderer
 
     /// <summary>
     /// Draws all detections in a single batch for maximum performance.
+    /// Coordinates are scaled from physical pixels to WPF DIPs using DpiScale.
     /// </summary>
     public void DrawAll(IEnumerable<(DetectedObject detection, OverlayGroup group)> items)
     {
         var sw = Stopwatch.StartNew();
         int count = 0;
 
+        // Calculate inverse DPI scale for converting physical pixels to DIPs
+        // At 125% DPI (1.25), we divide coordinates by 1.25 to get correct DIP positions
+        double invDpiScale = 1.0 / DpiScale;
+
         using var dc = _drawingVisual.RenderOpen();
 
         foreach (var (det, group) in items)
         {
-            DrawBoxInternal(dc, det.X1, det.Y1, det.Width, det.Height, det.Label, group);
+            // Scale detection coordinates from physical pixels to WPF DIPs
+            double x = det.X1 * invDpiScale;
+            double y = det.Y1 * invDpiScale;
+            double width = det.Width * invDpiScale;
+            double height = det.Height * invDpiScale;
+
+            DrawBoxInternal(dc, x, y, width, height, det.Label, group);
             count++;
         }
 
         var renderMs = sw.ElapsedMilliseconds;
-        Logger.Log($"[PERF] Render: draw={renderMs}ms | boxes={count}");
+        Logger.Log($"[PERF] Render: draw={renderMs}ms | boxes={count} | DPI={DpiScale:F2}");
     }
 
     /// <summary>
