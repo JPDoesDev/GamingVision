@@ -199,40 +199,16 @@
 
                     <!-- Overlay Settings -->
                     <GroupBox Header="Overlay Settings" Grid.Row="1">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="60"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Confidence Threshold:" VerticalAlignment="Center"/>
-                                <Slider x:Name="ConfidenceSlider"
-                                        Grid.Column="1"
-                                        Minimum="0.1"
-                                        Maximum="1.0"
-                                        Value="{Binding OverlayConfidenceThreshold}"
-                                        TickFrequency="0.05"
-                                        IsSnapToTickEnabled="True"
-                                        VerticalAlignment="Center"
-                                        Margin="10,0"/>
-                                <TextBlock Grid.Column="2"
-                                           Text="{Binding OverlayConfidenceThreshold, StringFormat={}{0:F2}}"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Right"/>
-                            </Grid>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Toggle Hotkey:" VerticalAlignment="Center"/>
-                                <TextBox Grid.Column="1"
-                                         Text="{Binding OverlayToggleHotkey, UpdateSourceTrigger=PropertyChanged}"
-                                         MaxLength="20"/>
-                            </Grid>
-                        </StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Toggle Hotkey:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding OverlayToggleHotkey, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="20"/>
+                        </Grid>
                     </GroupBox>
 
                     <!-- Overlay Groups -->

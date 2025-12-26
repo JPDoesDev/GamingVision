@@ -93,9 +93,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isOverlayRunning;
 
     [ObservableProperty]
-    private float _overlayConfidenceThreshold = 0.5f;
-
-    [ObservableProperty]
     private string _overlayToggleHotkey = "Alt+O";
 
     [ObservableProperty]
@@ -579,7 +576,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var profile = GetSelectedGameProfile();
         if (profile?.Overlay == null) return;
 
-        OverlayConfidenceThreshold = profile.Overlay.ConfidenceThreshold;
         OverlayToggleHotkey = profile.Overlay.ToggleHotkey;
 
         OverlayGroups.Clear();
@@ -1270,7 +1266,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (profile == null) return;
 
         profile.Overlay ??= new OverlaySettings();
-        profile.Overlay.ConfidenceThreshold = OverlayConfidenceThreshold;
         profile.Overlay.ToggleHotkey = OverlayToggleHotkey;
         profile.Overlay.Groups = OverlayGroups.ToList();
 
