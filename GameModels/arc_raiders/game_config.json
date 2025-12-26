@@ -1,7 +1,7 @@
 {
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251225_134250_640.onnx",
+  "modelFile": "ArcRaidersModel_v20251225_205936_640.onnx",
   "windowTitle": "ARC Raiders",
   "primaryLabels": [
     "interact",
@@ -53,37 +53,21 @@
       "description": "Hud timer for time left in the map"
     },
     {
-      "name": "arc-wasp",
-      "description": "ARC enemy: Wasp"
+      "name": "arc-flying",
+      "description": "ARC enemy: Flying type (Wasp, Rocket, Fireball)"
     },
     {
-      "name": "arc-rocket",
-      "description": "ARC enemy: Rocket"
-    },
-    {
-      "name": "arc-pop",
-      "description": "ARC enemy: Pop"
-    },
-    {
-      "name": "arc-fireball",
-      "description": "ARC enemy: Fireball"
-    },
-    {
-      "name": "arc-tick",
-      "description": "ARC enemy: Tick"
-    },
-    {
-      "name": "arc-spider",
-      "description": "ARC enemy: Spider"
+      "name": "arc-ground",
+      "description": "ARC enemy: Ground type (Pop, Tick, Spider)"
     }
   ],
   "hotkeys": {
-    "readPrimary": "Alt\u002B1",
-    "readSecondary": "Alt\u002B2",
-    "readTertiary": "Alt\u002B3",
-    "stopReading": "Alt\u002B4",
-    "toggleDetection": "Alt\u002B5",
-    "quit": "Alt\u002BQ"
+    "readPrimary": "Alt+1",
+    "readSecondary": "Alt+2",
+    "readTertiary": "Alt+3",
+    "stopReading": "Alt+4",
+    "toggleDetection": "Alt+5",
+    "quit": "Alt+Q"
   },
   "capture": {
     "method": "fullscreen",
@@ -121,7 +105,7 @@
   "overlay": {
     "enabled": true,
     "confidenceThreshold": 0.35,
-    "toggleHotkey": "Alt\u002BO",
+    "toggleHotkey": "Alt+O",
     "groups": [
       {
         "name": "All Labels",
