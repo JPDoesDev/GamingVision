@@ -112,7 +112,7 @@ Located in the application directory:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.1",
   "selectedGame": "no_mans_sky",
   "useDirectML": true,
   "autoStartDetection": false,
