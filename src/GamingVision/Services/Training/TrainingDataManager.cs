@@ -199,10 +199,10 @@ public class TrainingDataManager
     }
 
     /// <summary>
-    /// Gets the default training data root path relative to the app directory.
+    /// Gets the default training data root path.
     /// </summary>
     public static string GetDefaultTrainingDataRoot()
     {
-        return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "training_data");
+        return @"C:\GamingVision\Training_Data";
     }
 }

@@ -8,6 +8,12 @@ namespace GamingVision.Models;
 public class GameProfile
 {
     /// <summary>
+    /// Version of GamingVision that last saved this config.
+    /// Used for migration and compatibility tracking.
+    /// </summary>
+    public string ConfigVersion { get; set; } = "0.2.3";
+
+    /// <summary>
     /// Unique identifier for this game (matches folder name in GameModels).
     /// </summary>
     public string GameId { get; set; } = string.Empty;
@@ -88,6 +94,7 @@ public class GameProfile
     /// </summary>
     public GameProfile Clone() => new()
     {
+        ConfigVersion = ConfigVersion,
         GameId = GameId,
         DisplayName = DisplayName,
         ModelFile = ModelFile,
