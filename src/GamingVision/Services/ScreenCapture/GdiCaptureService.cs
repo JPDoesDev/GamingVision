@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Threading;
 using GamingVision.Native;
 using GamingVision.Utilities;
 
@@ -22,6 +23,9 @@ public class GdiCaptureService : IScreenCaptureService
     private Task? _captureLoopTask;
     private bool _disposed;
     private int _captureIntervalMs = 100; // ~10 FPS
+
+    // Frame ID counter for performance tracking (shared with WindowsCaptureService for continuity)
+    private static ulong _frameCounter;
 
     public bool IsCapturing { get; private set; }
 
@@ -278,18 +282,22 @@ public class GdiCaptureService : IScreenCaptureService
 
     private static CapturedFrame? CaptureRegion(Rectangle bounds)
     {
+        // Generate frame ID and capture start time for performance tracking
+        var frameId = Interlocked.Increment(ref _frameCounter);
+        var captureStartTicks = Stopwatch.GetTimestamp();
+
         try
         {
-            var sw = Stopwatch.StartNew();
+            Logger.PerfFrame(frameId, "CAPTURE", "GDI capture started");
 
             using var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
             using var graphics = Graphics.FromImage(bitmap);
-            var allocMs = sw.ElapsedMilliseconds;
-            sw.Restart();
+
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "Bitmap allocated");
 
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
-            var captureMs = sw.ElapsedMilliseconds;
-            sw.Restart();
+
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "BitBlt complete");
 
             // Convert bitmap to byte array
             var bitmapData = bitmap.LockBits(
@@ -304,10 +312,8 @@ public class GdiCaptureService : IScreenCaptureService
                 var data = new byte[size];
 
                 Marshal.Copy(bitmapData.Scan0, data, 0, size);
-                var copyMs = sw.ElapsedMilliseconds;
 
-                var totalMs = allocMs + captureMs + copyMs;
-                Logger.Log($"[PERF] Capture: alloc={allocMs}ms, bitblt={captureMs}ms, copy={copyMs}ms, TOTAL={totalMs}ms | {bounds.Width}x{bounds.Height}");
+                Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"CPU copy complete ({bounds.Width}x{bounds.Height})");
 
                 return new CapturedFrame
                 {
@@ -315,7 +321,9 @@ public class GdiCaptureService : IScreenCaptureService
                     Width = bitmap.Width,
                     Height = bitmap.Height,
                     Stride = stride,
-                    Timestamp = DateTime.UtcNow
+                    Timestamp = DateTime.UtcNow,
+                    FrameId = frameId,
+                    CaptureStartTicks = captureStartTicks
                 };
             }
             finally

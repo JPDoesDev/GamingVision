@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -40,6 +41,9 @@ public class WindowsCaptureService : IScreenCaptureService
     private CapturedFrame? _latestFrame;
     private readonly object _frameLock = new();
     private int _captureIntervalMs = 33; // ~30 FPS
+
+    // Frame ID counter for performance tracking
+    private static ulong _frameCounter;
 
     public bool IsCapturing { get; private set; }
 
@@ -291,14 +295,54 @@ public class WindowsCaptureService : IScreenCaptureService
     /// </summary>
     private static GraphicsCaptureItem? CreateCaptureItemForWindow(IntPtr hwnd)
     {
+        if (hwnd == IntPtr.Zero)
+        {
+            Logger.Warn("CreateCaptureItemForWindow: Window handle is null/zero");
+            return null;
+        }
+
+        var factory = GraphicsCaptureItemInterop.Factory;
+        if (factory == null)
+        {
+            Logger.Warn($"CreateCaptureItemForWindow: WGC factory not available - {GraphicsCaptureItemInterop.InitializationError}");
+            return null;
+        }
+
         try
         {
-            var factory = GraphicsCaptureItemInterop.Factory;
-            return factory.CreateForWindow(hwnd);
+            Logger.Log($"CreateCaptureItemForWindow: Attempting WGC capture for hwnd=0x{hwnd:X}");
+
+            // Get the IID for GraphicsCaptureItem (IGraphicsCaptureItem interface)
+            // This is the WinRT interface GUID, not the runtime class GUID
+            var iid = new Guid("79C3F95B-31F7-4EC2-A464-632EF5D30760");
+
+            var hr = factory.CreateForWindow(hwnd, ref iid, out var ptr);
+            if (hr != 0)
+            {
+                Logger.Warn($"CreateCaptureItemForWindow: CreateForWindow failed with HRESULT 0x{hr:X8} for hwnd=0x{hwnd:X}");
+                return null;
+            }
+
+            if (ptr == IntPtr.Zero)
+            {
+                Logger.Warn($"CreateCaptureItemForWindow: CreateForWindow returned null for hwnd=0x{hwnd:X}");
+                return null;
+            }
+
+            // Marshal the COM pointer to a WinRT GraphicsCaptureItem using CsWinRT interop
+            var item = MarshalInterface<GraphicsCaptureItem>.FromAbi(ptr);
+
+            Logger.Log($"CreateCaptureItemForWindow: Success, size={item.Size.Width}x{item.Size.Height}");
+            return item;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to create capture item for window: {ex.Message}");
+            // Common reasons for failure:
+            // - Window uses hardware overlay (some games)
+            // - Window has anti-capture protection
+            // - Window is minimized or invisible
+            // - Access denied (elevated process)
+            Logger.Warn($"CreateCaptureItemForWindow: Failed for hwnd=0x{hwnd:X} - {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
@@ -308,14 +352,49 @@ public class WindowsCaptureService : IScreenCaptureService
     /// </summary>
     private static GraphicsCaptureItem? CreateCaptureItemForMonitor(IntPtr hMonitor)
     {
+        if (hMonitor == IntPtr.Zero)
+        {
+            Logger.Warn("CreateCaptureItemForMonitor: Monitor handle is null/zero");
+            return null;
+        }
+
+        var factory = GraphicsCaptureItemInterop.Factory;
+        if (factory == null)
+        {
+            Logger.Warn($"CreateCaptureItemForMonitor: WGC factory not available - {GraphicsCaptureItemInterop.InitializationError}");
+            return null;
+        }
+
         try
         {
-            var factory = GraphicsCaptureItemInterop.Factory;
-            return factory.CreateForMonitor(hMonitor);
+            Logger.Log($"CreateCaptureItemForMonitor: Attempting WGC capture for hMonitor=0x{hMonitor:X}");
+
+            // Get the IID for GraphicsCaptureItem (IGraphicsCaptureItem interface)
+            // This is the WinRT interface GUID, not the runtime class GUID
+            var iid = new Guid("79C3F95B-31F7-4EC2-A464-632EF5D30760");
+
+            var hr = factory.CreateForMonitor(hMonitor, ref iid, out var ptr);
+            if (hr != 0)
+            {
+                Logger.Warn($"CreateCaptureItemForMonitor: CreateForMonitor failed with HRESULT 0x{hr:X8} for hMonitor=0x{hMonitor:X}");
+                return null;
+            }
+
+            if (ptr == IntPtr.Zero)
+            {
+                Logger.Warn($"CreateCaptureItemForMonitor: CreateForMonitor returned null for hMonitor=0x{hMonitor:X}");
+                return null;
+            }
+
+            // Marshal the COM pointer to a WinRT GraphicsCaptureItem using CsWinRT interop
+            var item = MarshalInterface<GraphicsCaptureItem>.FromAbi(ptr);
+
+            Logger.Log($"CreateCaptureItemForMonitor: Success, size={item.Size.Width}x{item.Size.Height}");
+            return item;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to create capture item for monitor: {ex.Message}");
+            Logger.Warn($"CreateCaptureItemForMonitor: Failed for hMonitor=0x{hMonitor:X} - {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
@@ -325,14 +404,17 @@ public class WindowsCaptureService : IScreenCaptureService
     /// </summary>
     private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
     {
-        var sw = Stopwatch.StartNew();
+        // Generate frame ID and capture start time for performance tracking
+        var frameId = Interlocked.Increment(ref _frameCounter);
+        var captureStartTicks = Stopwatch.GetTimestamp();
+
+        Logger.PerfFrame(frameId, "CAPTURE", "WGC frame arrived");
 
         using var frame = sender.TryGetNextFrame();
         if (frame == null)
             return;
 
-        var frameMs = sw.ElapsedMilliseconds;
-        sw.Restart();
+        Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "Frame retrieved from pool");
 
         // Check if size changed
         var newSize = frame.ContentSize;
@@ -354,41 +436,34 @@ public class WindowsCaptureService : IScreenCaptureService
         }
 
         // Get the D3D texture from the frame
-        var surfaceTexture = GetDXGIInterfaceFromObject(frame.Surface);
+        var surfaceTexture = GetDXGIInterfaceFromObject(frame.Surface, frameId, captureStartTicks);
         if (surfaceTexture == IntPtr.Zero)
+        {
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "ERROR: Failed to get D3D texture from surface");
             return;
+        }
 
         try
         {
-            var textureMs = sw.ElapsedMilliseconds;
-            sw.Restart();
-
             // Ensure staging texture exists
             EnsureStagingTexture(newSize.Width, newSize.Height);
+
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "Staging texture ready");
 
             // Copy to staging texture for CPU read
             D3D11.CopyResource(_d3dContext, _stagingTexture, surfaceTexture);
 
-            var copyMs = sw.ElapsedMilliseconds;
-            sw.Restart();
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "GPU copy complete");
 
             // Map and read the data
-            var capturedFrame = ReadStagingTexture(newSize.Width, newSize.Height);
+            var capturedFrame = ReadStagingTexture(newSize.Width, newSize.Height, frameId, captureStartTicks);
 
-            var readMs = sw.ElapsedMilliseconds;
-            var totalMs = frameMs + textureMs + copyMs + readMs;
-
-            Logger.Log($"[PERF] Capture (WGC): frame={frameMs}ms, texture={textureMs}ms, copy={copyMs}ms, read={readMs}ms, TOTAL={totalMs}ms | {newSize.Width}x{newSize.Height}");
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"CPU readback complete ({newSize.Width}x{newSize.Height})");
 
             if (capturedFrame != null)
             {
-                lock (_frameLock)
-                {
-                    _latestFrame?.Dispose();
-                    _latestFrame = capturedFrame;
-                }
-
-                // Fire event
+                // Fire event first - handler takes ownership and is responsible for the frame
+                // Don't dispose frames that are passed to event handlers
                 var handler = FrameCaptured;
                 if (handler != null)
                 {
@@ -404,6 +479,17 @@ public class WindowsCaptureService : IScreenCaptureService
                         }
                     });
                 }
+
+                // Update latest frame for polling access (separate from event-based access)
+                // Only dispose if no event handlers - otherwise event handler owns the frame
+                if (handler == null)
+                {
+                    lock (_frameLock)
+                    {
+                        _latestFrame?.Dispose();
+                        _latestFrame = capturedFrame;
+                    }
+                }
             }
         }
         finally
@@ -413,17 +499,84 @@ public class WindowsCaptureService : IScreenCaptureService
     }
 
     /// <summary>
-    /// Gets a D3D interface from a WinRT object.
+    /// Gets a D3D interface from a WinRT IDirect3DSurface using native ABI interop.
     /// </summary>
-    private static IntPtr GetDXGIInterfaceFromObject(object obj)
+    private static IntPtr GetDXGIInterfaceFromObject(object obj, ulong frameId, long captureStartTicks)
     {
-        var access = obj as IDirect3DDxgiInterfaceAccess;
-        if (access == null)
+        if (obj == null)
+        {
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "ERROR: Surface object is null");
             return IntPtr.Zero;
+        }
 
-        var guid = typeof(ID3D11Texture2D).GUID;
-        return access.GetInterface(guid);
+        try
+        {
+            // Cast to IDirect3DSurface first to ensure we have the right type
+            if (obj is not IDirect3DSurface surface)
+            {
+                Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"ERROR: Object is not IDirect3DSurface (type: {obj.GetType().Name})");
+                return IntPtr.Zero;
+            }
+
+            // Get the native ABI pointer using CsWinRT interop
+            var abiPtr = MarshalInterface<IDirect3DSurface>.FromManaged(surface);
+            if (abiPtr == IntPtr.Zero)
+            {
+                Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "ERROR: Failed to get ABI pointer from surface");
+                return IntPtr.Zero;
+            }
+
+            try
+            {
+                // QueryInterface for IDirect3DDxgiInterfaceAccess on the native pointer
+                var accessIid = typeof(IDirect3DDxgiInterfaceAccess).GUID;
+                var hr = Marshal.QueryInterface(abiPtr, ref accessIid, out var accessPtr);
+                if (hr != 0 || accessPtr == IntPtr.Zero)
+                {
+                    Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"ERROR: QueryInterface for IDirect3DDxgiInterfaceAccess failed (hr=0x{hr:X8})");
+                    return IntPtr.Zero;
+                }
+
+                try
+                {
+                    // Use vtable call to get the D3D11 texture interface
+                    var textureIid = typeof(ID3D11Texture2D).GUID;
+                    var texturePtr = IntPtr.Zero;
+
+                    // IDirect3DDxgiInterfaceAccess::GetInterface is at vtable slot 3 (after IUnknown methods)
+                    // HRESULT GetInterface(REFIID iid, void** p)
+                    var vtable = Marshal.ReadIntPtr(accessPtr);
+                    var getInterfacePtr = Marshal.ReadIntPtr(vtable, 3 * IntPtr.Size);
+                    var getInterface = Marshal.GetDelegateForFunctionPointer<GetInterfaceDelegate>(getInterfacePtr);
+
+                    hr = getInterface(accessPtr, ref textureIid, out texturePtr);
+                    if (hr != 0 || texturePtr == IntPtr.Zero)
+                    {
+                        Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"ERROR: GetInterface failed (hr=0x{hr:X8})");
+                        return IntPtr.Zero;
+                    }
+
+                    return texturePtr;
+                }
+                finally
+                {
+                    Marshal.Release(accessPtr);
+                }
+            }
+            finally
+            {
+                Marshal.Release(abiPtr);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"ERROR: GetDXGIInterface threw {ex.GetType().Name}: {ex.Message}");
+            return IntPtr.Zero;
+        }
     }
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int GetInterfaceDelegate(IntPtr thisPtr, ref Guid iid, out IntPtr ppv);
 
     /// <summary>
     /// Ensures the staging texture exists with the correct dimensions.
@@ -457,7 +610,11 @@ public class WindowsCaptureService : IScreenCaptureService
     /// <summary>
     /// Reads pixel data from the staging texture.
     /// </summary>
-    private CapturedFrame? ReadStagingTexture(int width, int height)
+    /// <param name="width">Width of the frame.</param>
+    /// <param name="height">Height of the frame.</param>
+    /// <param name="frameId">Frame ID for performance tracking.</param>
+    /// <param name="captureStartTicks">High-precision timestamp at capture start.</param>
+    private CapturedFrame? ReadStagingTexture(int width, int height, ulong frameId = 0, long captureStartTicks = 0)
     {
         if (_stagingTexture == IntPtr.Zero || _d3dContext == IntPtr.Zero)
             return null;
@@ -488,7 +645,9 @@ public class WindowsCaptureService : IScreenCaptureService
                 Width = width,
                 Height = height,
                 Stride = stride,
-                Timestamp = DateTime.UtcNow
+                Timestamp = DateTime.UtcNow,
+                FrameId = frameId,
+                CaptureStartTicks = captureStartTicks
             };
         }
         finally
@@ -652,41 +811,107 @@ internal interface IDXGIDevice { }
 /// </summary>
 internal static class GraphicsCaptureItemInterop
 {
-    public static IGraphicsCaptureItemInterop Factory { get; } = CreateFactory();
+    private static IGraphicsCaptureItemInterop? _factory;
+    private static bool _initialized;
+    private static string? _initError;
+
+    public static IGraphicsCaptureItemInterop? Factory
+    {
+        get
+        {
+            if (!_initialized)
+            {
+                _initialized = true;
+                try
+                {
+                    _factory = CreateFactory();
+                }
+                catch (Exception ex)
+                {
+                    _initError = ex.Message;
+                    Logger.Warn($"GraphicsCaptureItemInterop: Failed to create factory - {ex.GetType().Name}: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        Logger.Warn($"GraphicsCaptureItemInterop: Inner exception - {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+                    }
+                }
+            }
+            return _factory;
+        }
+    }
+
+    public static string? InitializationError => _initError;
 
     private static IGraphicsCaptureItemInterop CreateFactory()
     {
         var iid = typeof(IGraphicsCaptureItemInterop).GUID;
-        var hr = RoGetActivationFactory(
-            "Windows.Graphics.Capture.GraphicsCaptureItem",
-            ref iid,
-            out var factory);
+        Logger.Log($"GraphicsCaptureItemInterop: Calling RoGetActivationFactory for Windows.Graphics.Capture.GraphicsCaptureItem");
 
-        if (hr != 0)
+        const string className = "Windows.Graphics.Capture.GraphicsCaptureItem";
+        IntPtr hString = IntPtr.Zero;
+
+        try
         {
-            throw new InvalidOperationException($"Failed to get GraphicsCaptureItem factory: 0x{hr:X8}");
-        }
+            // Create HSTRING manually (MarshalAs(UnmanagedType.HString) doesn't work in .NET Core)
+            var hr = WindowsCreateString(className, (uint)className.Length, out hString);
+            if (hr != 0)
+            {
+                throw new InvalidOperationException($"WindowsCreateString failed with HRESULT 0x{hr:X8}");
+            }
 
-        return (IGraphicsCaptureItemInterop)factory;
+            hr = RoGetActivationFactory(hString, ref iid, out var factory);
+            if (hr != 0)
+            {
+                throw new InvalidOperationException($"RoGetActivationFactory failed with HRESULT 0x{hr:X8}");
+            }
+
+            Logger.Log("GraphicsCaptureItemInterop: Factory created successfully");
+            return (IGraphicsCaptureItemInterop)factory;
+        }
+        finally
+        {
+            // Clean up HSTRING
+            if (hString != IntPtr.Zero)
+            {
+                WindowsDeleteString(hString);
+            }
+        }
     }
 
     [DllImport("combase.dll", PreserveSig = true)]
+    private static extern int WindowsCreateString(
+        [MarshalAs(UnmanagedType.LPWStr)] string sourceString,
+        uint length,
+        out IntPtr hstring);
+
+    [DllImport("combase.dll", PreserveSig = true)]
+    private static extern int WindowsDeleteString(IntPtr hstring);
+
+    [DllImport("combase.dll", PreserveSig = true)]
     private static extern int RoGetActivationFactory(
-        [MarshalAs(UnmanagedType.HString)] string activatableClassId,
+        IntPtr activatableClassId,
         ref Guid iid,
         [MarshalAs(UnmanagedType.IUnknown)] out object factory);
 }
 
 /// <summary>
 /// COM interface for creating GraphicsCaptureItem from window or monitor handles.
+/// Uses proper WinRT interop signature with riid and out pointer.
 /// </summary>
 [ComImport]
 [Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IGraphicsCaptureItemInterop
 {
-    GraphicsCaptureItem CreateForWindow([In] IntPtr window);
-    GraphicsCaptureItem CreateForMonitor([In] IntPtr monitor);
+    int CreateForWindow(
+        [In] IntPtr window,
+        [In] ref Guid iid,
+        out IntPtr result);
+
+    int CreateForMonitor(
+        [In] IntPtr monitor,
+        [In] ref Guid iid,
+        out IntPtr result);
 }
 
 /// <summary>

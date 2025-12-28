@@ -182,12 +182,20 @@ public class YoloDetectionService : IDetectionService
             return [];
         }
 
+        // Extract frame ID and capture start ticks for performance logging
+        var frameId = frame.FrameId;
+        var captureStartTicks = frame.CaptureStartTicks;
+
         // Skip if inference is already running (prevents concurrent ONNX calls which can crash)
         lock (_inferenceLock)
         {
             if (_isInferenceRunning || _disposed)
             {
                 // Return null to indicate "skipped" vs empty list for "no detections found"
+                if (frameId > 0)
+                {
+                    Logger.PerfFrameTimed(frameId, captureStartTicks, "DETECT", "SKIPPED (inference busy)");
+                }
                 return null!;
             }
             _isInferenceRunning = true;
@@ -195,7 +203,12 @@ public class YoloDetectionService : IDetectionService
 
         try
         {
-            var totalSw = Stopwatch.StartNew();
+            if (frameId > 0)
+            {
+                Logger.PerfFrameTimed(frameId, captureStartTicks, "DETECT", "Started");
+            }
+
+            var detectStartTicks = Stopwatch.GetTimestamp();
 
             // Reuse frame buffer if large enough, otherwise allocate (handles resolution changes)
             var frameSize = frame.Data.Length;
@@ -205,9 +218,7 @@ public class YoloDetectionService : IDetectionService
             }
 
             // Copy frame data to reusable buffer
-            var copySw = Stopwatch.StartNew();
             Buffer.BlockCopy(frame.Data, 0, _frameBuffer, 0, frameSize);
-            var copyMs = copySw.ElapsedMilliseconds;
 
             var frameWidth = frame.Width;
             var frameHeight = frame.Height;
@@ -224,18 +235,30 @@ public class YoloDetectionService : IDetectionService
             {
                 try
                 {
-                    var sw = Stopwatch.StartNew();
+                    var preprocessStartTicks = Stopwatch.GetTimestamp();
 
                     // Preprocess: Convert BGRA to RGB and resize to model input size (uses reusable buffer)
                     var inputTensor = PreprocessFrameDataReusable(frameBuffer, frameWidth, frameHeight, frameStride, tensorBuffer);
-                    var preprocessMs = sw.ElapsedMilliseconds;
-                    sw.Restart();
+
+                    var preprocessMs = (double)(Stopwatch.GetTimestamp() - preprocessStartTicks) / Stopwatch.Frequency * 1000.0;
+                    if (frameId > 0)
+                    {
+                        Logger.PerfFrameTimed(frameId, captureStartTicks, "DETECT", $"Preprocess done ({preprocessMs:F1}ms)");
+                    }
+
+                    var inferenceStartTicks = Stopwatch.GetTimestamp();
 
                     // Run inference using reusable inputs array
                     inputsArray[0] = NamedOnnxValue.CreateFromTensor(_inputName, inputTensor);
                     using var results = session.Run(inputsArray);
-                    var inferenceMs = sw.ElapsedMilliseconds;
-                    sw.Restart();
+
+                    var inferenceMs = (double)(Stopwatch.GetTimestamp() - inferenceStartTicks) / Stopwatch.Frequency * 1000.0;
+                    if (frameId > 0)
+                    {
+                        Logger.PerfFrameTimed(frameId, captureStartTicks, "DETECT", $"Inference done ({inferenceMs:F1}ms)");
+                    }
+
+                    var postprocessStartTicks = Stopwatch.GetTimestamp();
 
                     var outputTensor = results.First().AsTensor<float>();
 
@@ -248,12 +271,14 @@ public class YoloDetectionService : IDetectionService
 
                     // Apply NMS
                     var finalDetections = ApplyNms(detections, 0.45f);
-                    var postprocessMs = sw.ElapsedMilliseconds;
 
-                    var totalMs = totalSw.ElapsedMilliseconds;
+                    var postprocessMs = (double)(Stopwatch.GetTimestamp() - postprocessStartTicks) / Stopwatch.Frequency * 1000.0;
+                    var totalMs = (double)(Stopwatch.GetTimestamp() - detectStartTicks) / Stopwatch.Frequency * 1000.0;
 
-                    // Log performance metrics
-                    Logger.Log($"[PERF] Detection: copy={copyMs}ms, preprocess={preprocessMs}ms, inference={inferenceMs}ms, postprocess={postprocessMs}ms, TOTAL={totalMs}ms | model={inputWidth}x{inputHeight}, detections={finalDetections.Count}");
+                    if (frameId > 0)
+                    {
+                        Logger.PerfFrameTimed(frameId, captureStartTicks, "DETECT", $"Postprocess done ({postprocessMs:F1}ms), {finalDetections.Count} detections, TOTAL={totalMs:F1}ms");
+                    }
 
                     return finalDetections;
                 }

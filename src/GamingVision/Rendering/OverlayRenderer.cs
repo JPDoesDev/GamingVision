@@ -88,9 +88,12 @@ public class OverlayRenderer
     /// Draws all detections in a single batch for maximum performance.
     /// Coordinates are scaled from physical pixels to WPF DIPs using DpiScale.
     /// </summary>
-    public void DrawAll(IEnumerable<(DetectedObject detection, OverlayGroup group)> items)
+    /// <param name="items">The detection/group pairs to render.</param>
+    /// <param name="frameId">Optional frame ID for performance tracking.</param>
+    /// <param name="captureStartTicks">Optional capture start ticks for performance tracking.</param>
+    public void DrawAll(IEnumerable<(DetectedObject detection, OverlayGroup group)> items, ulong frameId = 0, long captureStartTicks = 0)
     {
-        var sw = Stopwatch.StartNew();
+        var renderStartTicks = Stopwatch.GetTimestamp();
         int count = 0;
 
         // Calculate inverse DPI scale for converting physical pixels to DIPs
@@ -111,8 +114,12 @@ public class OverlayRenderer
             count++;
         }
 
-        var renderMs = sw.ElapsedMilliseconds;
-        Logger.Log($"[PERF] Render: draw={renderMs}ms | boxes={count} | DPI={DpiScale:F2}");
+        var renderMs = (double)(Stopwatch.GetTimestamp() - renderStartTicks) / Stopwatch.Frequency * 1000.0;
+
+        if (frameId > 0)
+        {
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", $"DrawAll complete ({renderMs:F1}ms, {count} boxes)");
+        }
     }
 
     /// <summary>

@@ -772,12 +772,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             _frameCount++;
 
+            // Extract frame ID and capture start for performance tracking
+            var frameId = e.FrameId;
+            var captureStartTicks = e.CaptureStartTicks;
+
             // Store frame dimensions before they might become invalid
             var frameWidth = e.Width;
             var frameHeight = e.Height;
 
-            // Log every 100 frames to reduce spam at higher FPS
-            if (_frameCount % 100 == 1)
+            // Log frame received with timing
+            if (frameId > 0)
+            {
+                Logger.PerfFrameTimed(frameId, captureStartTicks, "PIPELINE", "Frame received by MainViewModel");
+            }
+            else if (_frameCount % 100 == 1)
             {
                 Logger.Log($"OnFrameCaptured: Frame {_frameCount}, {frameWidth}x{frameHeight}, disposed={e.IsDisposed}");
             }
@@ -805,12 +813,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Fast path: Run detection once, use results for both overlay and screen reader
             if (overlayNeedsUpdate)
             {
-                var pipelineSw = Stopwatch.StartNew();
+                var detectStartTicks = Stopwatch.GetTimestamp();
                 try
                 {
                     // Use low threshold for overlay (per-group filtering happens in render)
                     var detections = await detectionService.DetectAsync(e, 0.1f);
-                    var detectMs = pipelineSw.ElapsedMilliseconds;
+                    var detectMs = (double)(Stopwatch.GetTimestamp() - detectStartTicks) / Stopwatch.Frequency * 1000.0;
 
                     if (detections != null)
                     {
@@ -818,14 +826,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         _detectionCount = detections.Count;
 
                         var detectionsForRender = detections;
-                        var renderSw = Stopwatch.StartNew();
+                        var dispatchStartTicks = Stopwatch.GetTimestamp();
+
+                        if (frameId > 0)
+                        {
+                            Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", "Dispatcher queued");
+                        }
+
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                             System.Windows.Threading.DispatcherPriority.Render,
                             () =>
                             {
-                                RenderOverlayDetections(detectionsForRender);
-                                var totalPipelineMs = pipelineSw.ElapsedMilliseconds;
-                                Logger.Log($"[PERF] Pipeline: detect={detectMs}ms, dispatch+render={totalPipelineMs - detectMs}ms, TOTAL={totalPipelineMs}ms");
+                                var dispatchMs = (double)(Stopwatch.GetTimestamp() - dispatchStartTicks) / Stopwatch.Frequency * 1000.0;
+                                if (frameId > 0)
+                                {
+                                    Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", $"Dispatcher executed ({dispatchMs:F1}ms wait)");
+                                }
+
+                                var renderStartTicks = Stopwatch.GetTimestamp();
+                                RenderOverlayDetections(detectionsForRender, frameId, captureStartTicks);
+                                var renderMs = (double)(Stopwatch.GetTimestamp() - renderStartTicks) / Stopwatch.Frequency * 1000.0;
+
+                                // Calculate total pipeline time from frame capture start
+                                if (frameId > 0 && captureStartTicks > 0)
+                                {
+                                    var totalMs = (double)(Stopwatch.GetTimestamp() - captureStartTicks) / Stopwatch.Frequency * 1000.0;
+                                    // Calculate capture time (from start to when frame was received)
+                                    // This is approximate since we don't have the exact capture end time here
+                                    var captureMs = totalMs - detectMs - dispatchMs - renderMs;
+                                    Logger.PerfFrameSummary(frameId, captureMs, detectMs, dispatchMs, renderMs, totalMs);
+                                }
                             });
 
                         // If screen reader is also enabled, process for TTS events (on separate task to not block)
@@ -842,7 +872,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                             System.Windows.Threading.DispatcherPriority.Render,
                             () => _overlayRenderer?.Clear());
-                        Logger.Log($"[PERF] Pipeline: SKIPPED (inference busy)");
+
+                        if (frameId > 0)
+                        {
+                            Logger.PerfFrame(frameId, "PIPELINE", "SKIPPED (inference busy)");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1200,7 +1234,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Renders overlay detections on the canvas using batch drawing for performance.
     /// </summary>
-    private void RenderOverlayDetections(List<DetectedObject> detections)
+    /// <param name="detections">The detections to render.</param>
+    /// <param name="frameId">Optional frame ID for performance tracking.</param>
+    /// <param name="captureStartTicks">Optional capture start ticks for performance tracking.</param>
+    private void RenderOverlayDetections(List<DetectedObject> detections, ulong frameId = 0, long captureStartTicks = 0)
     {
         if (_overlayRenderer == null || !_overlayVisible) return;
 
@@ -1219,7 +1256,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         // Single batch draw call - much faster than individual DrawBox calls
-        _overlayRenderer.DrawAll(items);
+        _overlayRenderer.DrawAll(items, frameId, captureStartTicks);
     }
 
     [RelayCommand]

@@ -1,15 +1,31 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace GamingVision.Utilities;
 
 /// <summary>
+/// Log category for multi-file logging.
+/// </summary>
+public enum LogCategory
+{
+    General,
+    Performance,
+    Error
+}
+
+/// <summary>
 /// Simple file logger for debugging application flow.
+/// Supports multiple log categories with separate files.
 /// </summary>
 public static class Logger
 {
     private static readonly object _lock = new();
+    private static readonly object _perfLock = new();
+    private static readonly object _errorLock = new();
     private static string? _logFilePath;
+    private static string? _perfLogFilePath;
+    private static string? _errorLogFilePath;
     private static bool _isEnabled;
     private static bool _isInitialized;
 
@@ -40,17 +56,24 @@ public static class Logger
 
             _logFilePath = logFilePath;
 
-            // Create directory if it doesn't exist
+            // Set up additional log files in the same directory
             var directory = Path.GetDirectoryName(_logFilePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            if (!string.IsNullOrEmpty(directory))
             {
-                try
+                _perfLogFilePath = Path.Combine(directory, "performance.log");
+                _errorLogFilePath = Path.Combine(directory, "error.log");
+
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(directory))
                 {
-                    Directory.CreateDirectory(directory);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Failed to create log directory: {ex.Message}");
+                    try
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Failed to create log directory: {ex.Message}");
+                    }
                 }
             }
 
@@ -134,6 +157,82 @@ public static class Logger
         WriteLog("DEBUG", message, caller, filePath, lineNumber);
     }
 
+    #region Performance Logging
+
+    /// <summary>
+    /// Logs a performance message to the dedicated performance log file.
+    /// </summary>
+    public static void Perf(string message)
+    {
+        WritePerfLog(message);
+    }
+
+    /// <summary>
+    /// Logs a frame-correlated performance message with stage information.
+    /// Format: [Frame #N] [STAGE] message
+    /// </summary>
+    /// <param name="frameId">The frame identifier for correlation.</param>
+    /// <param name="stage">The pipeline stage (e.g., CAPTURE, DETECT, RENDER).</param>
+    /// <param name="message">The log message.</param>
+    public static void PerfFrame(ulong frameId, string stage, string message)
+    {
+        WritePerfLog($"[Frame #{frameId}] [{stage}] {message}");
+    }
+
+    /// <summary>
+    /// Logs a frame-correlated performance message with elapsed time from frame start.
+    /// Format: [Frame #N] [T+X.Xms] [STAGE] message
+    /// </summary>
+    /// <param name="frameId">The frame identifier for correlation.</param>
+    /// <param name="captureStartTicks">High-precision timestamp from Stopwatch.GetTimestamp() at frame capture start.</param>
+    /// <param name="stage">The pipeline stage (e.g., CAPTURE, DETECT, RENDER).</param>
+    /// <param name="message">The log message.</param>
+    public static void PerfFrameTimed(ulong frameId, long captureStartTicks, string stage, string message)
+    {
+        var elapsedTicks = Stopwatch.GetTimestamp() - captureStartTicks;
+        var elapsedMs = (double)elapsedTicks / Stopwatch.Frequency * 1000.0;
+        WritePerfLog($"[Frame #{frameId}] [T+{elapsedMs:F1}ms] [{stage}] {message}");
+    }
+
+    /// <summary>
+    /// Logs a frame summary with timing breakdown.
+    /// Format: [Frame #N] SUMMARY: capture=Xms, detect=Xms, dispatch=Xms, render=Xms, TOTAL=Xms
+    /// </summary>
+    public static void PerfFrameSummary(ulong frameId, double captureMs, double detectMs, double dispatchMs, double renderMs, double totalMs)
+    {
+        WritePerfLog($"[Frame #{frameId}] SUMMARY: capture={captureMs:F1}ms, detect={detectMs:F1}ms, dispatch={dispatchMs:F1}ms, render={renderMs:F1}ms, TOTAL={totalMs:F1}ms");
+    }
+
+    /// <summary>
+    /// Writes a message to the performance log file.
+    /// </summary>
+    private static void WritePerfLog(string message)
+    {
+        if (!_isEnabled || !_isInitialized || string.IsNullOrEmpty(_perfLogFilePath))
+            return;
+
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        var logLine = $"[{timestamp}] {message}";
+
+        // Write to Debug output
+        System.Diagnostics.Debug.WriteLine($"[PERF] {logLine}");
+
+        // Write to performance log file
+        lock (_perfLock)
+        {
+            try
+            {
+                File.AppendAllText(_perfLogFilePath, logLine + Environment.NewLine);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to write perf log: {ex.Message}");
+            }
+        }
+    }
+
+    #endregion
+
     private static void WriteLog(string level, string message, string caller, string filePath, int lineNumber)
     {
         if (!_isEnabled || !_isInitialized || string.IsNullOrEmpty(_logFilePath))
@@ -161,20 +260,27 @@ public static class Logger
     }
 
     /// <summary>
-    /// Clears the log file.
+    /// Clears all log files.
     /// </summary>
     public static void Clear()
     {
-        if (string.IsNullOrEmpty(_logFilePath))
+        ClearLogFile(_logFilePath, _lock);
+        ClearLogFile(_perfLogFilePath, _perfLock);
+        ClearLogFile(_errorLogFilePath, _errorLock);
+    }
+
+    private static void ClearLogFile(string? filePath, object lockObj)
+    {
+        if (string.IsNullOrEmpty(filePath))
             return;
 
-        lock (_lock)
+        lock (lockObj)
         {
             try
             {
-                if (File.Exists(_logFilePath))
+                if (File.Exists(filePath))
                 {
-                    File.WriteAllText(_logFilePath, string.Empty);
+                    File.WriteAllText(filePath, string.Empty);
                 }
             }
             catch (Exception ex)

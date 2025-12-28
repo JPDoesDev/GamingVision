@@ -71,6 +71,17 @@ public class CapturedFrame : IDisposable
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Monotonically increasing frame counter for performance tracking.
+    /// </summary>
+    public ulong FrameId { get; init; }
+
+    /// <summary>
+    /// High-precision timestamp at capture start for performance measurement.
+    /// Use with Stopwatch.GetTimestamp() to calculate elapsed time.
+    /// </summary>
+    public long CaptureStartTicks { get; init; }
+
+    /// <summary>
     /// Whether this frame has been disposed.
     /// </summary>
     public bool IsDisposed { get; private set; }
