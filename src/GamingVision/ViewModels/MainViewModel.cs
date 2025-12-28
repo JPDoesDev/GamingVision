@@ -984,13 +984,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 // Speak the extracted text (only if auto-read is enabled)
                 if (autoReadEnabled && _ttsService != null && _ttsService.IsReady)
                 {
-                    // Start tracking the label being read so we can cancel if user moves away
-                    _detectionManager?.StartTrackingLabel(detection.Label, detection);
+                    // Auto-read should NOT interrupt current speech - skip if TTS is busy
+                    // Manual reads (hotkeys) will interrupt, but auto-reads should wait/skip
+                    if (_ttsService.IsSpeaking)
+                    {
+                        Logger.Log($"Auto-read: Skipping '{detection.Label}' - TTS is busy");
+                    }
+                    else
+                    {
+                        // Start tracking the label being read so we can cancel if user moves away
+                        _detectionManager?.StartTrackingLabel(detection.Label, detection);
 
-                    await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: true);
+                        // Auto-read uses interrupt: false - should not interrupt anything
+                        await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: false);
 
-                    // Stop tracking after speech completes (if not already stopped due to disappearance)
-                    _detectionManager?.StopTrackingLabel(detection.Label);
+                        // Stop tracking after speech completes (if not already stopped due to disappearance)
+                        _detectionManager?.StopTrackingLabel(detection.Label);
+                    }
                 }
 
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
