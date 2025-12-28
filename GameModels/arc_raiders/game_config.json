@@ -1,8 +1,8 @@
 {
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251225_205936_640.onnx",
-  "windowTitle": "\u200B\uFEFFA\uFEFFRC\u2005\u200B\u200B\u200B\uFEFFR\uFEFF\uFEFF\uFEFF\u200B\u200Ba\u200B\u200Bi\u200B\u200B\u200B\u200B\u200Bde\u200Brs",
+  "modelFile": "ArcRaidersModel_v20251226_220759_640.onnx",
+  "windowTitle": "﻿﻿AR​﻿​﻿﻿C​​​​ ​​R​﻿a﻿i﻿d​﻿er​s",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -59,6 +59,34 @@
     {
       "name": "arc-ground",
       "description": "ARC enemy: Ground type (Pop, Tick, Spider)"
+    },
+    {
+      "name": "hud-notification",
+      "description": "In game notifications"
+    },
+    {
+      "name": "hud-serial",
+      "description": "Serial number displayed in lower right (to filter false positives)"
+    },
+    {
+      "name": "inv-tags",
+      "description": "Tags displayed at top of each inventory item"
+    },
+    {
+      "name": "inv-stats",
+      "description": "Stats of an inventory item"
+    },
+    {
+      "name": "hud-player",
+      "description": "Player info section of the HUD"
+    },
+    {
+      "name": "hud-weapon",
+      "description": "Weapon info of the player"
+    },
+    {
+      "name": "control",
+      "description": "Controls on menus that are labeled"
     }
   ],
   "hotkeys": {
@@ -70,7 +98,7 @@
     "quit": "Alt+Q"
   },
   "capture": {
-    "method": "window",
+    "method": "fullscreen",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -117,7 +145,25 @@
         "showLabel": false,
         "style": "highContrastBlack",
         "confidenceThreshold": 0.15
+      },
+      {
+        "name": "Arc",
+        "labels": [
+          "arc-flying",
+          "arc-ground"
+        ],
+        "color": "#FF0000",
+        "thickness": 10,
+        "showLabel": true,
+        "style": "outlined",
+        "confidenceThreshold": 0.05
       }
     ]
+  },
+  "training": {
+    "enabled": true,
+    "dataPath": "D:\\Dev\\Training_Data\\New_Arc_Raiders",
+    "captureHotkey": "F1",
+    "annotationConfidenceThreshold": 0.3
   }
 }

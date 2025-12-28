@@ -1469,7 +1469,7 @@
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
-    "version": "0.2.1",
+    "version": "0.2.2",
     "restore": {
       "projectUniqueName": "D:\\Dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj",
       "projectName": "GamingVision",

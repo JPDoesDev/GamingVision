@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>GamingVision</AssemblyName>
     <RootNamespace>GamingVision</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <Authors>GamingVision Team</Authors>
     <Description>Accessibility tool for visually impaired gamers using computer vision and text-to-speech</Description>
     <WindowsSdkPackageVersion>10.0.22621.48</WindowsSdkPackageVersion>
