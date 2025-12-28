@@ -23,6 +23,7 @@
         <SolidColorBrush x:Key="StopButtonBrush" Color="#FF882222"/>
         <SolidColorBrush x:Key="StopButtonHoverBrush" Color="#FFAA3333"/>
         <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     </Window.Resources>
 
     <Grid Margin="20">
@@ -334,6 +335,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -392,8 +394,72 @@
                         </Grid>
                     </GroupBox>
 
+                    <!-- Batch Processing -->
+                    <GroupBox Grid.Row="3" Header="Batch Processing" Margin="0,10,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Run detection on all captured images using the selected model."
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,10"/>
+
+                            <!-- Confidence Threshold Slider -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="50"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="Confidence:"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <Slider Grid.Column="1"
+                                        Minimum="0.05"
+                                        Maximum="0.95"
+                                        Value="{Binding AnnotationConfidenceThreshold}"
+                                        TickFrequency="0.05"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Annotation Confidence Threshold"
+                                        AutomationProperties.HelpText="Minimum confidence level for detections to be saved as annotations"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding AnnotationConfidenceThreshold, StringFormat={}{0:P0}}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           MinWidth="40"/>
+                            </Grid>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="POST PROCESS"
+                                        Command="{Binding PostProcessTrainingImagesCommand}"
+                                        FontWeight="Bold"
+                                        MinWidth="120"
+                                        AutomationProperties.Name="Post Process Training Images"
+                                        AutomationProperties.HelpText="Run YOLO detection on all training images and regenerate annotations">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsPostProcessing}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <TextBlock Text="{Binding PostProcessStatus}"
+                                           VerticalAlignment="Center"
+                                           Margin="15,0,0,0"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+
                     <!-- Training Status -->
-                    <Border Grid.Row="3"
+                    <Border Grid.Row="4"
                             Background="{DynamicResource SurfaceBrush}"
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
@@ -438,7 +504,7 @@
                     </Border>
 
                     <!-- Info Note -->
-                    <Border Grid.Row="4"
+                    <Border Grid.Row="5"
                             Background="{DynamicResource SurfaceBrush}"
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
@@ -452,7 +518,7 @@
                                        Margin="0,0,0,5"/>
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource SecondaryTextBrush}">
-                                <Run Text="When enabled, pressing the capture hotkey will save a screenshot of the game window to the training data folder. If a model is loaded, detections will be auto-annotated. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
+                                <Run Text="When enabled, pressing the capture hotkey saves a screenshot to the training data folder. Use POST PROCESS to run detection on all captured images - this can be done offline after playing. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
                             </TextBlock>
                         </StackPanel>
                     </Border>

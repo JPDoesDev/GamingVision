@@ -25,7 +25,7 @@ public class TrainingSettings
     /// Minimum confidence threshold for auto-annotation.
     /// Detections below this threshold won't be saved as annotations.
     /// </summary>
-    public float AnnotationConfidenceThreshold { get; set; } = 0.3f;
+    public float AnnotationConfidenceThreshold { get; set; } = 0.1f;
 
     /// <summary>
     /// Creates a deep copy of these training settings.

@@ -156,6 +156,20 @@ public class TrainingDataManager
     }
 
     /// <summary>
+    /// Gets all image files in the training images folder.
+    /// </summary>
+    /// <returns>Array of full paths to image files, sorted alphabetically.</returns>
+    public string[] GetImageFiles()
+    {
+        if (!Directory.Exists(ImagesPath))
+            return [];
+
+        return Directory.GetFiles(ImagesPath, "*.jpg")
+            .OrderBy(f => f)
+            .ToArray();
+    }
+
+    /// <summary>
     /// Gets statistics about the current training data.
     /// </summary>
     public (int imageCount, int labeledCount) GetStatistics()

@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -74,6 +76,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private string _trainingStatus = string.Empty;
 
     [ObservableProperty]
+    private float _annotationConfidenceThreshold = 0.1f;
+
+    [ObservableProperty]
     private string _detectionStatus = "Stopped";
 
     [ObservableProperty]
@@ -118,6 +123,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private OverlayGroup? _selectedOverlayGroup;
+
+    // Post-processing properties
+    [ObservableProperty]
+    private bool _isPostProcessing;
+
+    [ObservableProperty]
+    private string _postProcessStatus = string.Empty;
 
     public MainViewModel()
     {
@@ -1455,28 +1467,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Captures a training screenshot with auto-annotation.
+    /// Captures a training screenshot (image only, no detection).
+    /// Use Post Process to run detection on captured images.
     /// </summary>
-    private async Task CaptureTrainingScreenshotAsync()
+    private Task CaptureTrainingScreenshotAsync()
     {
         if (!IsEngineRunning)
         {
             Logger.Log("Training capture: Engine not running");
             System.Media.SystemSounds.Beep.Play();
-            return;
+            return Task.CompletedTask;
         }
 
         if (!IsTrainingEnabled)
         {
             Logger.Log("Training capture: Training disabled");
-            return;
+            return Task.CompletedTask;
         }
 
         if (_captureManager == null || _trainingDataManager == null)
         {
             Logger.Warn("Training capture: Manager not initialized");
             System.Media.SystemSounds.Beep.Play();
-            return;
+            return Task.CompletedTask;
         }
 
         try
@@ -1487,42 +1500,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Logger.Error("Training capture: Failed to capture frame");
                 System.Media.SystemSounds.Beep.Play();
-                return;
+                return Task.CompletedTask;
             }
 
             try
             {
                 var filename = _trainingDataManager.GetNextFilename();
-                List<DetectedObject> detections = [];
 
-                // Run detection if model is loaded
-                var detectionService = _detectionManager?.DetectionService;
-                if (detectionService != null && detectionService.IsReady)
-                {
-                    var profile = GetSelectedGameProfile();
-                    var threshold = profile?.Training?.AnnotationConfidenceThreshold ?? 0.3f;
-                    detections = await detectionService.DetectAsync(frame, threshold) ?? [];
-                }
-
-                // Save screenshot
+                // Save screenshot only (no detection - use Post Process for that)
                 _trainingDataManager.SaveScreenshot(frame, filename);
-
-                // Save annotations if detections found
-                if (detections.Count > 0 && _detectionManager?.DetectionService != null)
-                {
-                    var labels = _detectionManager.DetectionService.Labels;
-                    _trainingDataManager.SaveAnnotations(detections, filename, frame.Width, frame.Height, labels);
-                }
 
                 _trainingCaptureCount++;
 
                 // Update UI with status
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
-                    TrainingStatus = $"Captured: {filename} ({detections.Count} detections)";
+                    TrainingStatus = $"Captured: {filename}";
                 });
 
-                Logger.Log($"Training capture: {filename} - {detections.Count} detections");
+                Logger.Log($"Training capture: {filename}");
 
                 // Play a subtle sound to confirm capture
                 System.Media.SystemSounds.Asterisk.Play();
@@ -1537,6 +1533,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Logger.Error("Training capture error", ex);
             System.Media.SystemSounds.Beep.Play();
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -1588,8 +1586,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         IsTrainingEnabled = profile.Training?.Enabled ?? true;
         TrainingCaptureHotkey = profile.Training?.CaptureHotkey ?? "F1";
         TrainingDataPath = GetTrainingDataRoot(profile);
+        AnnotationConfidenceThreshold = profile.Training?.AnnotationConfidenceThreshold ?? 0.1f;
         _trainingCaptureCount = 0;
         UpdateTrainingStatus();
+    }
+
+    partial void OnAnnotationConfidenceThresholdChanged(float value)
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        profile.Training ??= new TrainingSettings();
+        profile.Training.AnnotationConfidenceThreshold = value;
+        Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
     }
 
     /// <summary>
@@ -1627,6 +1636,191 @@ public partial class MainViewModel : ObservableObject, IDisposable
     partial void OnIsEngineRunningChanged(bool value)
     {
         UpdateTrainingStatus();
+    }
+
+    /// <summary>
+    /// Command to post-process all training images with the current model.
+    /// Runs detection on all images and regenerates annotation files.
+    /// </summary>
+    [RelayCommand]
+    private async Task PostProcessTrainingImagesAsync()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null)
+        {
+            TrainingStatus = "No game selected";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        if (string.IsNullOrEmpty(profile.ModelFile))
+        {
+            TrainingStatus = "No model configured for this game";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        // Get model path
+        var modelPath = _configManager.GetModelPath(profile.GameId, profile.ModelFile);
+        if (!File.Exists(modelPath))
+        {
+            TrainingStatus = $"Model not found: {profile.ModelFile}";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        // Get training data folder (same logic as InitializeTrainingDataManager)
+        var trainingRoot = string.IsNullOrEmpty(profile.Training?.DataPath)
+            ? TrainingDataManager.GetDefaultTrainingDataRoot()
+            : Path.GetDirectoryName(profile.Training.DataPath) ?? TrainingDataManager.GetDefaultTrainingDataRoot();
+
+        var gameFolder = string.IsNullOrEmpty(profile.Training?.DataPath)
+            ? profile.GameId
+            : Path.GetFileName(profile.Training.DataPath);
+
+        var trainingDataManager = new TrainingDataManager(trainingRoot, string.IsNullOrEmpty(gameFolder) ? profile.GameId : gameFolder);
+        trainingDataManager.Initialize();
+
+        // Get all image files
+        var imageFiles = trainingDataManager.GetImageFiles();
+        if (imageFiles.Length == 0)
+        {
+            TrainingStatus = "No images found to process";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        IsPostProcessing = true;
+        PostProcessStatus = "Loading model...";
+
+        try
+        {
+            // Create dedicated detection service for batch processing
+            using var detectionService = new YoloDetectionService();
+            var initialized = await detectionService.InitializeAsync(modelPath, _appConfig.UseDirectML);
+            if (!initialized)
+            {
+                TrainingStatus = "Failed to load model for post-processing";
+                System.Media.SystemSounds.Beep.Play();
+                return;
+            }
+
+            var labels = detectionService.Labels;
+            var threshold = AnnotationConfidenceThreshold;
+            var totalImages = imageFiles.Length;
+            var processedCount = 0;
+            var totalDetections = 0;
+
+            // Save classes.txt file
+            trainingDataManager.SaveClasses(labels);
+
+            foreach (var imagePath in imageFiles)
+            {
+                processedCount++;
+                PostProcessStatus = $"Processing {processedCount}/{totalImages}...";
+
+                // Load image as CapturedFrame
+                var frame = LoadImageAsCapturedFrame(imagePath);
+                if (frame == null)
+                {
+                    Logger.Warn($"Failed to load image: {imagePath}");
+                    continue;
+                }
+
+                try
+                {
+                    // Run detection
+                    var detections = await detectionService.DetectAsync(frame, threshold) ?? [];
+                    totalDetections += detections.Count;
+
+                    // Save annotations (always overwrite)
+                    var filename = Path.GetFileNameWithoutExtension(imagePath);
+                    trainingDataManager.SaveAnnotations(detections, filename, frame.Width, frame.Height, labels);
+                }
+                finally
+                {
+                    frame.Dispose();
+                }
+
+                // Allow UI to update
+                await Task.Yield();
+            }
+
+            TrainingStatus = $"Post-process complete: {totalImages} images, {totalDetections} detections";
+            PostProcessStatus = string.Empty;
+            Logger.Log($"Post-processing complete: {totalImages} images, {totalDetections} total detections");
+            System.Media.SystemSounds.Asterisk.Play();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Post-processing error", ex);
+            TrainingStatus = "Post-processing failed - see logs";
+            System.Media.SystemSounds.Beep.Play();
+        }
+        finally
+        {
+            IsPostProcessing = false;
+            PostProcessStatus = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Loads a JPEG image file as a CapturedFrame for detection.
+    /// </summary>
+    private static CapturedFrame? LoadImageAsCapturedFrame(string imagePath)
+    {
+        try
+        {
+            using var bitmap = new Bitmap(imagePath);
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            var stride = width * 4; // BGRA format
+
+            var bitmapData = bitmap.LockBits(
+                new Rectangle(0, 0, width, height),
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format32bppArgb);
+
+            try
+            {
+                var data = new byte[height * stride];
+
+                // Copy bitmap data row by row (handles different strides)
+                for (int y = 0; y < height; y++)
+                {
+                    int srcOffset = y * bitmapData.Stride;
+                    int dstOffset = y * stride;
+
+                    unsafe
+                    {
+                        byte* src = (byte*)bitmapData.Scan0 + srcOffset;
+                        for (int x = 0; x < stride; x++)
+                        {
+                            data[dstOffset + x] = src[x];
+                        }
+                    }
+                }
+
+                return new CapturedFrame
+                {
+                    Data = data,
+                    Width = width,
+                    Height = height,
+                    Stride = stride,
+                    FrameId = 0,
+                    CaptureStartTicks = 0
+                };
+            }
+            finally
+            {
+                bitmap.UnlockBits(bitmapData);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to load image: {imagePath}", ex);
+            return null;
+        }
     }
 
     #endregion
