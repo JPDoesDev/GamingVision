@@ -1,20 +1,24 @@
 {
+  "configVersion": "0.2.3",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251226_220759_640.onnx",
-  "windowTitle": "﻿﻿AR​﻿​﻿﻿C​​​​ ​​R​﻿a﻿i﻿d​﻿er​s",
+  "modelFile": "ArcRaidersModel_v20251231_000834_640.onnx",
+  "windowTitle": "A\u200B\u200B\uFEFF\u200BRC \uFEFFR\uFEFF\u200B\uFEFF\u200B\uFEFF\u200B\u200Ba\u200B\u200B\u200Bid\u200B\u200B\u200B\uFEFFe\u200Brs",
   "primaryLabels": [
     "interact",
     "inv-title",
     "quick_menu",
     "st-title",
-    "wp-ext-elv"
+    "wp-ext-elv",
+    "hud-notification"
   ],
   "secondaryLabels": [
     "inv-info",
     "st-info"
   ],
-  "tertiaryLabels": [],
+  "tertiaryLabels": [
+    "hud-weapon"
+  ],
   "labelPriority": [
     "inv-title",
     "inv-info"
@@ -54,7 +58,7 @@
     },
     {
       "name": "arc-flying",
-      "description": "ARC enemy: Flying type (Wasp, Rocket, Fireball)"
+      "description": "ARC enemy: Flying type (Wasp, Rocket)"
     },
     {
       "name": "arc-ground",
@@ -90,12 +94,12 @@
     }
   ],
   "hotkeys": {
-    "readPrimary": "Alt+1",
-    "readSecondary": "Alt+2",
-    "readTertiary": "Alt+3",
-    "stopReading": "Alt+4",
-    "toggleDetection": "Alt+5",
-    "quit": "Alt+Q"
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
+    "quit": "Alt\u002BQ"
   },
   "capture": {
     "method": "fullscreen",
@@ -119,8 +123,8 @@
   },
   "detection": {
     "autoReadCooldown": 2500,
-    "confidenceThreshold": 0.1,
-    "autoReadConfidenceThreshold": 0.1,
+    "confidenceThreshold": 0.2,
+    "autoReadConfidenceThreshold": 0.3,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
@@ -133,10 +137,10 @@
   "overlay": {
     "enabled": true,
     "confidenceThreshold": 0.35,
-    "toggleHotkey": "Alt+O",
+    "toggleHotkey": "Alt\u002BO",
     "groups": [
       {
-        "name": "All Labels",
+        "name": "Waypoint",
         "labels": [
           "wp-ext-elv"
         ],
@@ -144,7 +148,7 @@
         "thickness": 10,
         "showLabel": false,
         "style": "highContrastBlack",
-        "confidenceThreshold": 0.15
+        "confidenceThreshold": 0.05
       },
       {
         "name": "Arc",
@@ -154,7 +158,7 @@
         ],
         "color": "#FF0000",
         "thickness": 10,
-        "showLabel": true,
+        "showLabel": false,
         "style": "outlined",
         "confidenceThreshold": 0.05
       }
@@ -164,6 +168,6 @@
     "enabled": true,
     "dataPath": "D:\\Dev\\Training_Data\\New_Arc_Raiders",
     "captureHotkey": "F1",
-    "annotationConfidenceThreshold": 0.3
+    "annotationConfidenceThreshold": 0.1
   }
 }

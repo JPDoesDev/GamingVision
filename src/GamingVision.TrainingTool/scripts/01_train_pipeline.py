@@ -356,7 +356,7 @@ def step_train() -> bool:
 # =============================================================================
 
 def step_export() -> bool:
-    """Export model to ONNX and deploy."""
+    """Export model to ONNX and deploy (both 640 and 1440 sizes)."""
     print_step(4, "EXPORT MODEL")
 
     # Find trained model
@@ -371,18 +371,22 @@ def step_export() -> bool:
 
     weights_path = best_pt if best_pt.exists() else last_pt
 
+    # Export both sizes
+    export_sizes = [640, 1440]
+
     print(f"\nModel to export:")
     print(f"  Weights: {weights_path}")
     print(f"  Format:  ONNX (opset {EXPORT_CONFIG['opset']})")
-    print(f"  Size:    {EXPORT_CONFIG['imgsz']}x{EXPORT_CONFIG['imgsz']}")
+    print(f"  Sizes:   {', '.join(f'{s}x{s}' for s in export_sizes)}")
 
     # Generate version stamp
     version = datetime.now().strftime("%Y%m%d_%H%M%S")
-    versioned_name = f"{MODEL_NAME}_v{version}"
 
     print(f"\nOutput files:")
-    print(f"  Model:  {GAME_MODELS_DIR / f'{versioned_name}.onnx'}")
-    print(f"  Labels: {GAME_MODELS_DIR / f'{versioned_name}.txt'}")
+    for size in export_sizes:
+        versioned_name = f"{MODEL_NAME}_v{version}_{size}"
+        print(f"  {GAME_MODELS_DIR / f'{versioned_name}.onnx'}")
+        print(f"  {GAME_MODELS_DIR / f'{versioned_name}.txt'}")
 
     if not prompt_yes_no("\nExport model?"):
         print("Skipping export step.")
@@ -391,60 +395,87 @@ def step_export() -> bool:
     try:
         from ultralytics import YOLO
 
-        # Load and export
-        print("\nLoading model...")
-        model = YOLO(str(weights_path))
+        deployed_models = []
 
-        print("Exporting to ONNX...")
-        export_path = model.export(
-            format=EXPORT_CONFIG["format"],
-            opset=EXPORT_CONFIG["opset"],
-            simplify=EXPORT_CONFIG["simplify"],
-            dynamic=EXPORT_CONFIG["dynamic"],
-            imgsz=EXPORT_CONFIG["imgsz"],
-        )
+        for imgsz in export_sizes:
+            print()
+            print("-" * 40)
+            print(f"Exporting {imgsz}x{imgsz} model...")
+            print("-" * 40)
 
-        export_path = Path(export_path)
-        print(f"  Exported: {export_path}")
+            # Load model fresh for each export
+            print(f"Loading model: {weights_path}")
+            model = YOLO(str(weights_path))
 
-        # Deploy to GameModels
-        print("\nDeploying to GameModels...")
-        GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            print(f"Exporting to ONNX...")
+            export_path = model.export(
+                format=EXPORT_CONFIG["format"],
+                opset=EXPORT_CONFIG["opset"],
+                simplify=EXPORT_CONFIG["simplify"],
+                dynamic=EXPORT_CONFIG["dynamic"],
+                imgsz=imgsz,
+            )
 
-        target_onnx = GAME_MODELS_DIR / f"{versioned_name}.onnx"
-        target_labels = GAME_MODELS_DIR / f"{versioned_name}.txt"
+            export_path = Path(export_path)
+            print(f"  Exported: {export_path}")
 
-        shutil.copy2(export_path, target_onnx)
-        print(f"  Copied: {target_onnx}")
+            # Deploy to GameModels
+            GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Create labels file
-        class_names = get_class_names()
-        with open(target_labels, 'w') as f:
-            f.write('\n'.join(class_names))
-        print(f"  Created: {target_labels}")
+            versioned_name = f"{MODEL_NAME}_v{version}_{imgsz}"
+            target_onnx = GAME_MODELS_DIR / f"{versioned_name}.onnx"
+            target_labels = GAME_MODELS_DIR / f"{versioned_name}.txt"
 
-        # Update game_config.json
+            shutil.copy2(export_path, target_onnx)
+            print(f"  Copied: {target_onnx}")
+
+            # Create labels file
+            class_names = get_class_names()
+            with open(target_labels, 'w') as f:
+                f.write('\n'.join(class_names))
+            print(f"  Created: {target_labels}")
+
+            # Clean up temp export in weights folder
+            if export_path.exists() and export_path != target_onnx:
+                export_path.unlink()
+
+            onnx_size = target_onnx.stat().st_size / (1024 * 1024)
+            print(f"  Size: {onnx_size:.1f} MB")
+
+            deployed_models.append((versioned_name, imgsz))
+
+        # Update game_config.json to use 640 (speed) model by default
         config_path = GAME_MODELS_DIR / "game_config.json"
         if config_path.exists():
             import json
             with open(config_path, 'r') as f:
                 config = json.load(f)
 
+            # Use 640 model as default
+            default_model = next(
+                (name for name, size in deployed_models if size == 640),
+                deployed_models[0][0]
+            )
+
             old_model = config.get("modelFile", "")
-            config["modelFile"] = f"{versioned_name}.onnx"
+            config["modelFile"] = f"{default_model}.onnx"
 
             with open(config_path, 'w') as f:
                 json.dump(config, f, indent=2)
 
             print(f"\nUpdated game_config.json:")
-            print(f"  modelFile: {old_model} -> {versioned_name}.onnx")
+            print(f"  modelFile: {old_model} -> {default_model}.onnx")
         else:
             print_warning(f"game_config.json not found at {config_path}")
             print("You'll need to create this file manually.")
 
         # Final summary
-        onnx_size = target_onnx.stat().st_size / (1024 * 1024)
-        print_success(f"Model exported successfully ({onnx_size:.1f} MB)")
+        print()
+        print_success("Models exported successfully!")
+        print("\nExported models:")
+        for name, size in deployed_models:
+            mode = "(Speed - 30 FPS)" if size == 640 else "(Accuracy - higher detail)"
+            print(f"  {name}.onnx {mode}")
 
         return True
     except Exception as e:

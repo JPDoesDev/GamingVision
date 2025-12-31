@@ -95,14 +95,14 @@ def train_model(epochs: int = None, resume: bool = False):
         # Build training arguments
         train_args = {
             "data": str(DATASET_YAML),
-            "device": TRAINING_CONFIG["device"],  # GPU/CPU selection
+            "device": TRAINING_CONFIG["device"],
             "epochs": training_epochs,
             "imgsz": TRAINING_CONFIG["imgsz"],
             "batch": TRAINING_CONFIG["batch"],
             "patience": TRAINING_CONFIG["patience"],
             "project": str(RUNS_DIR),
             "name": project_name,
-            "exist_ok": True,  # Overwrite existing runs
+            "exist_ok": True,
 
             # Learning rate
             "lr0": TRAINING_CONFIG["lr0"],
@@ -110,7 +110,7 @@ def train_model(epochs: int = None, resume: bool = False):
             "warmup_epochs": TRAINING_CONFIG["warmup_epochs"],
             "cos_lr": TRAINING_CONFIG["cos_lr"],
 
-            # Augmentation - optimized for UI elements
+            # Augmentation
             "augment": TRAINING_CONFIG["augment"],
             "hsv_h": TRAINING_CONFIG["hsv_h"],
             "hsv_s": TRAINING_CONFIG["hsv_s"],
