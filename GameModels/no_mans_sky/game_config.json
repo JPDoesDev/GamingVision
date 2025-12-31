@@ -1,5 +1,5 @@
 {
-  "configVersion": "0.2.3",
+  "configVersion": "0.2.4",
   "gameId": "no_mans_sky",
   "displayName": "No Man\u0027s Sky",
   "modelFile": "NoMansModel.onnx",

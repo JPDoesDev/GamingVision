@@ -1,5 +1,5 @@
 {
-  "configVersion": "0.2.3",
+  "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
   "modelFile": "ArcRaidersModel_v20251231_000834_640.onnx",
