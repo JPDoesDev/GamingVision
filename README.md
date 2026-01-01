@@ -272,7 +272,7 @@ MIT License - See LICENSE file for details.
 ## Support
 
 - **GitHub**: [https://github.com/JPDoesDev/GamingVision](https://github.com/JPDoesDev/GamingVision)
-- **Discord**: [https://discord.gg/xRn7hWZ52c](https://discord.gg/xRn7hWZ52c)
+- **Discord**: [https://discord.gg/jNW8Vh7dpD](https://discord.gg/jNW8Vh7dpD)
 - **Youtube**: [https://www.youtube.com/@JPDoesDev](https://www.youtube.com/@JPDoesDev)
 - **Issues**: [Report bugs or request features](https://github.com/JPDoesDev/GamingVision/issues)
 - **Website**: [www.jpdoes.dev](https://www.jpdoes.dev)
