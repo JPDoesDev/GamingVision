@@ -59,6 +59,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Display Name:" VerticalAlignment="Center" Margin="0,8"/>
@@ -74,28 +75,37 @@
                                 Command="{Binding BrowseForModelCommand}"
                                 AutomationProperties.Name="Browse for Model File"/>
 
+                        <!-- Waypoint Tracker Configuration -->
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Waypoint Tracker:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding WaypointDisplay}" VerticalAlignment="Center" Margin="15,8"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
+                                   AutomationProperties.Name="Waypoint Tracker Summary"/>
+                        <Button Grid.Row="2" Grid.Column="2" Content="Configure..."
+                                x:Name="ConfigureWaypointButton" Click="ConfigureWaypointButton_Click"
+                                AutomationProperties.Name="Configure Waypoint Tracker"/>
+
                         <!-- Detection Label Configuration -->
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Primary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PrimaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Primary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PrimaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Primary Labels Summary"/>
-                        <Button Grid.Row="2" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="3" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigurePrimaryButton" Click="ConfigurePrimaryButton_Click"
                                 AutomationProperties.Name="Configure Primary Detection Labels"/>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Secondary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SecondaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Secondary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SecondaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Secondary Labels Summary"/>
-                        <Button Grid.Row="3" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="4" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigureSecondaryButton" Click="ConfigureSecondaryButton_Click"
                                 AutomationProperties.Name="Configure Secondary Detection Labels"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Tertiary Detection:" VerticalAlignment="Center" Margin="0,8"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TertiaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Tertiary Detection:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TertiaryLabelsDisplay}" VerticalAlignment="Center" Margin="15,8"
                                    Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"
                                    AutomationProperties.Name="Tertiary Labels Summary"/>
-                        <Button Grid.Row="4" Grid.Column="2" Content="Configure..."
+                        <Button Grid.Row="5" Grid.Column="2" Content="Configure..."
                                 x:Name="ConfigureTertiaryButton" Click="ConfigureTertiaryButton_Click"
                                 AutomationProperties.Name="Configure Tertiary Detection Labels"/>
                     </Grid>
@@ -316,12 +326,12 @@
                             <TextBlock Text="{Binding AutoReadCooldown, StringFormat={}{0} ms}" Margin="15,0,0,0" Width="70" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-read / Waypoint:" VerticalAlignment="Center" Margin="0,8"/>
                         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding AutoReadConfidenceThreshold}"
                                     TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                    AutomationProperties.Name="Auto-Read Confidence Threshold"
-                                    AutomationProperties.HelpText="Higher values reduce false positives during automatic reading"/>
+                                    AutomationProperties.Name="Auto-read and Waypoint Confidence Threshold"
+                                    AutomationProperties.HelpText="Higher values reduce false positives during automatic reading and waypoint tracking"/>
                             <TextBlock Text="{Binding AutoReadConfidenceThreshold, StringFormat={}{0:F1}}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 

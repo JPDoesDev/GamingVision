@@ -60,6 +60,12 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _tertiaryLabelsDisplay = "";
 
+    // Waypoint settings
+    private WaypointSettings _waypointSettings = new();
+
+    [ObservableProperty]
+    private string _waypointDisplay = "(disabled)";
+
     [ObservableProperty]
     private bool _canDeleteGame;
 
@@ -217,6 +223,10 @@ public partial class GameSettingsViewModel : ObservableObject
         _tertiaryLabelsList = [.. _currentProfile.TertiaryLabels];
         UpdateLabelDisplays();
 
+        // Load waypoint settings
+        _waypointSettings = _currentProfile.Waypoint?.Clone() ?? new WaypointSettings();
+        UpdateWaypointDisplay();
+
         // Can only delete if there's more than one game
         CanDeleteGame = Games.Count > 1;
 
@@ -266,6 +276,9 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.PrimaryLabels = [.. _primaryLabelsList];
         _currentProfile.SecondaryLabels = [.. _secondaryLabelsList];
         _currentProfile.TertiaryLabels = [.. _tertiaryLabelsList];
+
+        // Waypoint settings
+        _currentProfile.Waypoint = _waypointSettings.Clone();
 
         // Update display name in list
         if (SelectedGame != null)
@@ -319,6 +332,35 @@ public partial class GameSettingsViewModel : ObservableObject
         TertiaryLabelsDisplay = _tertiaryLabelsList.Count > 0
             ? string.Join(", ", _tertiaryLabelsList)
             : "(none configured)";
+    }
+
+    private void UpdateWaypointDisplay()
+    {
+        if (_waypointSettings.Enabled && !string.IsNullOrEmpty(_waypointSettings.Label))
+        {
+            WaypointDisplay = $"{_waypointSettings.Label} ({_waypointSettings.ReadIntervalSeconds:F1}s)";
+        }
+        else
+        {
+            WaypointDisplay = "(disabled)";
+        }
+    }
+
+    /// <summary>
+    /// Opens the waypoint configuration window.
+    /// </summary>
+    public void OpenWaypointConfiguration(System.Windows.Window owner)
+    {
+        if (_currentProfile == null) return;
+
+        var viewModel = new WaypointConfigViewModel(_currentProfile.Labels, _waypointSettings);
+        var window = new Views.WaypointConfigWindow(viewModel) { Owner = owner };
+
+        if (window.ShowDialog() == true)
+        {
+            _waypointSettings = viewModel.GetSettings();
+            UpdateWaypointDisplay();
+        }
     }
 
     /// <summary>

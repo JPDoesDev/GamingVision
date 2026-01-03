@@ -37,6 +37,15 @@ public interface ITtsService : IDisposable
     Task SpeakWithPanAsync(string text, float pan, bool interrupt = false);
 
     /// <summary>
+    /// Plays a beep sound with stereo panning for directional audio feedback.
+    /// Used by sonar mode for waypoint tracking.
+    /// </summary>
+    /// <param name="pan">Pan value from -1.0 (full left) to 1.0 (full right), 0.0 is center.</param>
+    /// <param name="frequencyHz">Beep frequency in Hz. Default is 880Hz (A5).</param>
+    /// <param name="durationMs">Beep duration in milliseconds. Default is 100ms.</param>
+    Task PlayBeepWithPanAsync(float pan, int frequencyHz = 880, int durationMs = 100);
+
+    /// <summary>
     /// Queues text to be spoken after current speech completes.
     /// </summary>
     /// <param name="text">The text to queue.</param>

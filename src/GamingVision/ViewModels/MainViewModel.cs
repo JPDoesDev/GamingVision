@@ -52,6 +52,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _windowPollingCts;
     private Task? _windowPollingTask;
 
+    // Waypoint timer fields
+    private System.Timers.Timer? _waypointTimer;
+    private WaypointSettings? _waypointSettings;
+    private volatile bool _sonarArmed; // For sonar mode: true when ready to beep on next detection
+
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
 
@@ -779,10 +784,132 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 EnableOverlay();
             }
+
+            // Start waypoint timer if configured
+            InitializeWaypointTracker(profile);
         }
         else
         {
             DetectionStatus = "Failed to start capture";
+        }
+    }
+
+    /// <summary>
+    /// Initializes the waypoint tracker timer.
+    /// </summary>
+    private void InitializeWaypointTracker(GameProfile profile)
+    {
+        StopWaypointTracker();
+
+        _waypointSettings = profile.Waypoint;
+        if (_waypointSettings == null || !_waypointSettings.Enabled ||
+            string.IsNullOrEmpty(_waypointSettings.Label))
+        {
+            Logger.Log("WaypointTracker: Not enabled or no label configured");
+            return;
+        }
+
+        var intervalMs = _waypointSettings.ReadIntervalSeconds * 1000;
+        _waypointTimer = new System.Timers.Timer(intervalMs);
+        _waypointTimer.Elapsed += OnWaypointTimerElapsed;
+
+        // For read mode: auto-reset so it fires at regular intervals
+        // For sonar mode: no auto-reset, we manually restart after beeping
+        _waypointTimer.AutoReset = _waypointSettings.Mode != "sonar";
+        _waypointTimer.Start();
+
+        var modeDesc = _waypointSettings.Mode == "sonar" ? "sonar" : "read";
+        Logger.Log($"WaypointTracker: Started ({modeDesc}) for '{_waypointSettings.Label}' @ {_waypointSettings.ReadIntervalSeconds}s");
+    }
+
+    /// <summary>
+    /// Stops the waypoint tracker timer.
+    /// </summary>
+    private void StopWaypointTracker()
+    {
+        _sonarArmed = false;
+
+        if (_waypointTimer != null)
+        {
+            _waypointTimer.Stop();
+            _waypointTimer.Elapsed -= OnWaypointTimerElapsed;
+            _waypointTimer.Dispose();
+            _waypointTimer = null;
+        }
+        _waypointSettings = null;
+    }
+
+    /// <summary>
+    /// Handles the waypoint timer elapsed event.
+    /// </summary>
+    private async void OnWaypointTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (_waypointSettings?.Mode == "sonar")
+        {
+            // Sonar mode: arm the beep, actual beep happens on next detection
+            _sonarArmed = true;
+            Logger.Log("WaypointTracker: Sonar armed");
+        }
+        else
+        {
+            // Read mode: read the waypoint immediately
+            await ReadWaypointAsync();
+        }
+    }
+
+    /// <summary>
+    /// Reads the waypoint label via OCR and speaks it.
+    /// </summary>
+    private async Task ReadWaypointAsync()
+    {
+        if (_detectionManager == null || _waypointSettings == null || _ttsService == null || !_ttsService.IsReady)
+            return;
+
+        // Skip if we're waiting for window
+        if (IsWaitingForWindow)
+            return;
+
+        var waypointLabel = _waypointSettings.Label;
+
+        // Get the waypoint detection
+        var waypointDetection = _detectionManager.GetWaypointDetection(waypointLabel);
+        if (waypointDetection == null)
+        {
+            // Waypoint not detected - skip silently
+            return;
+        }
+
+        // Get frame for OCR
+        CapturedFrame? frame;
+        lock (_frameLock)
+        {
+            frame = _latestFrame;
+        }
+
+        if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
+            return;
+
+        try
+        {
+            // Run OCR on waypoint bounding box
+            var regions = new List<OcrRegion> { OcrRegion.FromDetection(waypointDetection) };
+            var textResults = await _ocrService.ExtractTextFromRegionsAsync(
+                frame.Data, frame.Width, frame.Height, frame.Stride, regions);
+
+            if (textResults.TryGetValue(waypointLabel, out var text) && !string.IsNullOrWhiteSpace(text))
+            {
+                Logger.Log($"WaypointTracker: Reading '{text}'");
+
+                // Speak with primary voice (don't interrupt current speech)
+                if (!_ttsService.IsSpeaking)
+                {
+                    await SpeakWithVoiceAsync(text, SpeechTier.Primary, waypointDetection, frame.Width, interrupt: false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("WaypointTracker: Error reading waypoint", ex);
         }
     }
 
@@ -943,8 +1070,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Logger.Log("Stopping engine");
 
-        // Stop window polling first
+        // Stop timers first
         StopWindowPolling();
+        StopWaypointTracker();
 
         // Disable both features first
         DisableScreenReader();
@@ -1123,11 +1251,93 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void OnDetectionsReady(object? sender, DetectionEventArgs e)
+    private async void OnDetectionsReady(object? sender, DetectionEventArgs e)
     {
         // Note: Overlay rendering is now handled directly in OnFrameCaptured for better performance.
         // This event is kept for TTS/Screen Reader functionality which subscribes to PrimaryObjectChanged.
-        // We no longer need to do anything here since detection count is updated in OnFrameCaptured.
+
+        // Check for sonar mode waypoint beep
+        if (_sonarArmed && _waypointSettings?.Mode == "sonar")
+        {
+            await CheckAndPlaySonarBeepAsync();
+        }
+    }
+
+    /// <summary>
+    /// Checks for waypoint detection and plays sonar beep if armed.
+    /// </summary>
+    private async Task CheckAndPlaySonarBeepAsync()
+    {
+        if (_detectionManager == null || _waypointSettings == null || _ttsService == null)
+            return;
+
+        // Skip if waiting for window
+        if (IsWaitingForWindow)
+            return;
+
+        var waypointLabel = _waypointSettings.Label;
+
+        // Get waypoint detection (uses narrowest width for sonar mode)
+        var waypointDetection = _detectionManager.GetSonarWaypointDetection(waypointLabel);
+        if (waypointDetection == null)
+        {
+            // No waypoint detected above threshold, stay armed and wait
+            Logger.LogDebug($"WaypointTracker: Sonar armed but no waypoint '{waypointLabel}' above threshold");
+            return;
+        }
+
+        // Get frame dimensions for pan calculation BEFORE disarming
+        CapturedFrame? frame;
+        lock (_frameLock)
+        {
+            frame = _latestFrame;
+        }
+
+        if (frame == null || frame.IsDisposed)
+        {
+            // Can't get frame dimensions, stay armed and try next detection
+            Logger.LogDebug("WaypointTracker: Sonar armed but frame unavailable");
+            return;
+        }
+
+        // Now we have everything we need - disarm and play beep
+        _sonarArmed = false;
+
+        // Calculate pan based on waypoint position
+        // Center 15% of screen = both speakers equally (pan = 0)
+        // Left of center = left speaker ONLY (pan = -1)
+        // Right of center = right speaker ONLY (pan = 1)
+        float normalizedX = waypointDetection.CenterX / (float)frame.Width;
+        float pan;
+
+        const float centerZone = 0.15f; // 15% center zone
+        float centerStart = 0.5f - (centerZone / 2f); // 0.425
+        float centerEnd = 0.5f + (centerZone / 2f);   // 0.575
+
+        if (normalizedX >= centerStart && normalizedX <= centerEnd)
+        {
+            // In center zone - play in both speakers equally
+            pan = 0f;
+        }
+        else if (normalizedX < centerStart)
+        {
+            // Left side - full left speaker only
+            pan = -1f;
+        }
+        else
+        {
+            // Right side - full right speaker only
+            pan = 1f;
+        }
+
+        Logger.Log($"WaypointTracker: Sonar beep at X={normalizedX:F2}, pan={pan:F2}");
+
+        // Play the beep
+        await _ttsService.PlayBeepWithPanAsync(pan);
+
+        // Restart the timer for next interval
+        _waypointTimer?.Start();
+        Logger.LogDebug("WaypointTracker: Timer restarted for next sonar interval");
     }
 
     private void OnLabelDisappeared(object? sender, LabelDisappearedEventArgs e)
@@ -1139,8 +1349,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ttsService?.Stop();
         _ttsService?.ClearQueue();
 
-        // Reset the auto-read cooldown so a new object can be read immediately
-        _detectionManager?.ResetCooldown();
+        // Reset position tracking so the next detection triggers auto-read
+        _detectionManager?.ResetPositionTracking();
     }
 
     private async void OnPrimaryObjectChanged(object? sender, PrimaryObjectChangedEventArgs e)

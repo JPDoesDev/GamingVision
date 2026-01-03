@@ -490,6 +490,73 @@ public class WindowsTtsService : ITtsService
         }
     }
 
+    /// <summary>
+    /// Plays a beep sound with stereo panning for directional audio feedback.
+    /// </summary>
+    public Task PlayBeepWithPanAsync(float pan, int frequencyHz = 880, int durationMs = 100)
+    {
+        // Clamp pan to valid range
+        pan = Math.Max(-1f, Math.Min(1f, pan));
+
+        return Task.Run(() =>
+        {
+            try
+            {
+                // Generate sine wave samples
+                const int sampleRate = 44100;
+                int sampleCount = (int)(sampleRate * durationMs / 1000.0);
+                var samples = new float[sampleCount];
+
+                for (int i = 0; i < sampleCount; i++)
+                {
+                    // Generate sine wave
+                    double time = (double)i / sampleRate;
+                    samples[i] = (float)(Math.Sin(2 * Math.PI * frequencyHz * time) * 0.5);
+
+                    // Apply fade in/out to prevent clicks (10ms fade)
+                    int fadeSamples = sampleRate / 100; // 10ms
+                    if (i < fadeSamples)
+                        samples[i] *= (float)i / fadeSamples;
+                    else if (i > sampleCount - fadeSamples)
+                        samples[i] *= (float)(sampleCount - i) / fadeSamples;
+                }
+
+                // Create a sample provider from the buffer
+                var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 1);
+                var bufferProvider = new BufferSampleProvider(samples, waveFormat);
+
+                // Apply panning
+                var panningSample = new PanningSampleProvider(bufferProvider)
+                {
+                    Pan = pan
+                };
+
+                // Apply volume
+                var volumeSample = new VolumeSampleProvider(panningSample)
+                {
+                    Volume = _currentVolume / 100f
+                };
+
+                // Play the beep
+                using var waveOut = new WaveOutEvent();
+                waveOut.Init(volumeSample);
+                waveOut.Play();
+
+                // Wait for playback to complete
+                while (waveOut.PlaybackState == PlaybackState.Playing)
+                {
+                    Thread.Sleep(10);
+                }
+
+                Logger.Log($"Sonar beep played (pan={pan:F2}, freq={frequencyHz}Hz, duration={durationMs}ms)");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Error playing sonar beep", ex);
+            }
+        });
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -519,5 +586,38 @@ public class WindowsTtsService : ITtsService
         }
 
         GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>
+/// Simple sample provider that reads from a float buffer.
+/// Used for playing generated audio like beeps.
+/// </summary>
+internal class BufferSampleProvider : ISampleProvider
+{
+    private readonly float[] _buffer;
+    private int _position;
+
+    public WaveFormat WaveFormat { get; }
+
+    public BufferSampleProvider(float[] buffer, WaveFormat waveFormat)
+    {
+        _buffer = buffer;
+        WaveFormat = waveFormat;
+        _position = 0;
+    }
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        int samplesAvailable = _buffer.Length - _position;
+        int samplesToCopy = Math.Min(samplesAvailable, count);
+
+        if (samplesToCopy > 0)
+        {
+            Array.Copy(_buffer, _position, buffer, offset, samplesToCopy);
+            _position += samplesToCopy;
+        }
+
+        return samplesToCopy;
     }
 }

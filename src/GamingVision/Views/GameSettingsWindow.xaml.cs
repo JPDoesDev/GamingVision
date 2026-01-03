@@ -50,4 +50,9 @@ public partial class GameSettingsWindow : Window
     {
         _viewModel.OpenLabelConfiguration("Tertiary", this);
     }
+
+    private void ConfigureWaypointButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.OpenWaypointConfiguration(this);
+    }
 }

@@ -14,9 +14,14 @@ public class DetectionManager : IDisposable
     private readonly IDetectionService _detectionService;
     private GameProfile? _currentProfile;
     private bool _disposed;
-    private DateTime _lastDetectionTime = DateTime.MinValue;
     private List<DetectedObject> _lastDetections = [];
     private readonly object _detectionLock = new();
+
+    // Position tracking for auto-read (replaces cooldown-based approach)
+    private readonly Dictionary<string, TrackedPosition> _previousPositions = new();
+    private int _lastFrameWidth;
+    private int _lastFrameHeight;
+    private const float PositionChangeThreshold = 0.10f; // 10% position change triggers re-read
 
     // Tracking for label disappearance detection
     private readonly Dictionary<string, int> _framesSinceLastSeen = new();
@@ -110,15 +115,16 @@ public class DetectionManager : IDisposable
 
         // Store and process detections (inference actually ran)
         Logger.Log($"ProcessFrameAsync: DetectAsync returned {detections.Count} detections, calling ProcessDetections");
-        ProcessDetections(detections);
+        ProcessDetections(detections, frame.Width, frame.Height);
 
         return detections;
     }
 
     /// <summary>
     /// Processes detections to determine if primary objects changed.
+    /// Uses position-based change detection instead of cooldown.
     /// </summary>
-    private void ProcessDetections(List<DetectedObject> detections)
+    private void ProcessDetections(List<DetectedObject> detections, int frameWidth, int frameHeight)
     {
         if (_currentProfile == null)
         {
@@ -147,8 +153,15 @@ public class DetectionManager : IDisposable
 
             // Filter primary detections by higher auto-read threshold for automatic reading
             var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+
+            // Exclude waypoint label from auto-read (it has its own timer)
+            var waypointLabel = _currentProfile.Waypoint?.Enabled == true
+                ? _currentProfile.Waypoint.Label
+                : null;
+
             var autoReadPrimaryDetections = primaryDetections
                 .Where(d => d.Confidence >= autoReadThreshold)
+                .Where(d => string.IsNullOrEmpty(waypointLabel) || d.Label != waypointLabel)
                 .ToList();
 
             // Raise detection event
@@ -161,39 +174,72 @@ public class DetectionManager : IDisposable
                 Timestamp = DateTime.UtcNow
             });
 
-            // Check if primary objects changed (using auto-read threshold filtered detections)
-            var previousAutoReadLabels = _lastDetections
-                .Where(d => _currentProfile.PrimaryLabels.Contains(d.Label) &&
-                           d.Confidence >= autoReadThreshold)
-                .Select(d => d.Label)
-                .OrderBy(l => l)
-                .ToList();
+            // Position-based auto-read: detect new labels or significant position changes
+            var detectionsToRead = new List<DetectedObject>();
+            var currentPositions = new Dictionary<string, TrackedPosition>();
 
-            var currentAutoReadLabels = autoReadPrimaryDetections
-                .Select(d => d.Label)
-                .OrderBy(l => l)
-                .ToList();
-
-            bool primaryChanged = !previousAutoReadLabels.SequenceEqual(currentAutoReadLabels);
-
-            // Check cooldown for auto-read
-            var timeSinceLastDetection = DateTime.UtcNow - _lastDetectionTime;
-            var cooldownMs = _currentProfile.Detection.AutoReadCooldown;
-
-            if (primaryChanged && timeSinceLastDetection.TotalMilliseconds >= cooldownMs)
+            // Build current positions map (use highest confidence detection per label)
+            foreach (var det in autoReadPrimaryDetections.OrderByDescending(d => d.Confidence))
             {
-                _lastDetectionTime = DateTime.UtcNow;
+                if (!currentPositions.ContainsKey(det.Label))
+                {
+                    currentPositions[det.Label] = new TrackedPosition
+                    {
+                        Label = det.Label,
+                        CenterX = det.CenterX,
+                        CenterY = det.CenterY,
+                        FrameWidth = frameWidth,
+                        FrameHeight = frameHeight
+                    };
+                }
+            }
 
-                // Sort by priority (use auto-read filtered detections)
-                var sortedPrimary = SortByPriority(autoReadPrimaryDetections, _currentProfile.LabelPriority);
+            var previousLabels = _previousPositions.Keys.ToHashSet();
+            var currentLabels = currentPositions.Keys.ToHashSet();
+
+            // Case 1: NEW labels that weren't in previous frame
+            foreach (var label in currentLabels.Except(previousLabels))
+            {
+                var det = autoReadPrimaryDetections.First(d => d.Label == label);
+                detectionsToRead.Add(det);
+                Logger.Log($"AutoRead: New label appeared: {label}");
+            }
+
+            // Case 2: EXISTING labels with significant position change (>10% in X or Y)
+            foreach (var label in currentLabels.Intersect(previousLabels))
+            {
+                var prevPos = _previousPositions[label];
+                var currPos = currentPositions[label];
+
+                if (currPos.HasMovedSignificantly(prevPos, PositionChangeThreshold))
+                {
+                    var det = autoReadPrimaryDetections.First(d => d.Label == label);
+                    detectionsToRead.Add(det);
+                    Logger.Log($"AutoRead: Label position changed significantly: {label}");
+                }
+            }
+
+            // Fire event if there are detections to read
+            if (detectionsToRead.Count > 0)
+            {
+                var sortedDetections = SortByPriority(detectionsToRead, _currentProfile.LabelPriority);
 
                 PrimaryObjectChanged?.Invoke(this, new PrimaryObjectChangedEventArgs
                 {
-                    Detections = sortedPrimary,
+                    Detections = sortedDetections,
                     Timestamp = DateTime.UtcNow
                 });
             }
 
+            // Update tracked positions for next frame
+            _previousPositions.Clear();
+            foreach (var kvp in currentPositions)
+            {
+                _previousPositions[kvp.Key] = kvp.Value;
+            }
+
+            _lastFrameWidth = frameWidth;
+            _lastFrameHeight = frameHeight;
             _lastDetections = detections;
             Logger.LogDebug($"ProcessDetections: Stored {detections.Count} detections in _lastDetections");
         }
@@ -294,11 +340,83 @@ public class DetectionManager : IDisposable
     }
 
     /// <summary>
-    /// Resets the auto-read cooldown timer.
+    /// Resets position tracking, causing the next detection to trigger auto-read.
     /// </summary>
-    public void ResetCooldown()
+    public void ResetPositionTracking()
     {
-        _lastDetectionTime = DateTime.MinValue;
+        lock (_detectionLock)
+        {
+            _previousPositions.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Gets the current detection for a specific waypoint label.
+    /// Used by the waypoint timer to read waypoints independently.
+    /// Filters by auto-read confidence threshold.
+    /// If multiple waypoints are detected, returns the one closest to screen center.
+    /// </summary>
+    public DetectedObject? GetWaypointDetection(string waypointLabel)
+    {
+        if (string.IsNullOrEmpty(waypointLabel) || _currentProfile == null)
+            return null;
+
+        var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+
+        lock (_detectionLock)
+        {
+            var candidates = _lastDetections
+                .Where(d => d.Label == waypointLabel && d.Confidence >= autoReadThreshold)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return null;
+
+            if (candidates.Count == 1)
+                return candidates[0];
+
+            // Multiple waypoints detected - return the one closest to screen center
+            float centerX = _lastFrameWidth / 2f;
+            float centerY = _lastFrameHeight / 2f;
+
+            return candidates
+                .OrderBy(d => {
+                    float dx = d.CenterX - centerX;
+                    float dy = d.CenterY - centerY;
+                    return dx * dx + dy * dy; // Squared distance (no need for sqrt)
+                })
+                .First();
+        }
+    }
+
+    /// <summary>
+    /// Gets the current detection for a waypoint label optimized for sonar mode.
+    /// Filters by auto-read confidence threshold.
+    /// If multiple waypoints are detected, returns the one with narrowest width
+    /// (most likely to be the focused/targeted waypoint).
+    /// </summary>
+    public DetectedObject? GetSonarWaypointDetection(string waypointLabel)
+    {
+        if (string.IsNullOrEmpty(waypointLabel) || _currentProfile == null)
+            return null;
+
+        var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+
+        lock (_detectionLock)
+        {
+            var candidates = _lastDetections
+                .Where(d => d.Label == waypointLabel && d.Confidence >= autoReadThreshold)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return null;
+
+            if (candidates.Count == 1)
+                return candidates[0];
+
+            // Multiple waypoints detected - return the one with narrowest width
+            return candidates.OrderBy(d => d.Width).First();
+        }
     }
 
     /// <summary>
@@ -490,4 +608,39 @@ public class LabelDisappearedEventArgs : EventArgs
     /// True if the label moved to a different object (same label, different position).
     /// </summary>
     public bool MovedToNewObject { get; init; }
+}
+
+/// <summary>
+/// Tracks a detection's position for change detection.
+/// Used to determine if same-labeled objects have moved significantly.
+/// </summary>
+internal readonly struct TrackedPosition
+{
+    public string Label { get; init; }
+    public float CenterX { get; init; }
+    public float CenterY { get; init; }
+    public int FrameWidth { get; init; }
+    public int FrameHeight { get; init; }
+
+    /// <summary>
+    /// Checks if position has changed more than threshold percentage in X or Y.
+    /// </summary>
+    /// <param name="other">Previous position to compare against.</param>
+    /// <param name="threshold">Change threshold as fraction (0.10 = 10%).</param>
+    /// <returns>True if position changed significantly.</returns>
+    public bool HasMovedSignificantly(TrackedPosition other, float threshold)
+    {
+        if (Label != other.Label) return true;
+        if (FrameWidth == 0 || FrameHeight == 0) return false;
+
+        // Normalize positions to 0-1 range
+        float thisNormX = CenterX / FrameWidth;
+        float thisNormY = CenterY / FrameHeight;
+        float otherNormX = other.CenterX / other.FrameWidth;
+        float otherNormY = other.CenterY / other.FrameHeight;
+
+        // Check if either X or Y changed by more than threshold
+        return Math.Abs(thisNormX - otherNormX) > threshold ||
+               Math.Abs(thisNormY - otherNormY) > threshold;
+    }
 }
