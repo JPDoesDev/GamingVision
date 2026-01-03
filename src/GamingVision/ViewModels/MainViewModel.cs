@@ -44,6 +44,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _overlayVisible = true;
     private volatile bool _stoppingOverlay;
 
+    // Crosshair fields
+    private CrosshairWindow? _crosshairWindow;
+    private CrosshairRenderer? _crosshairRenderer;
+    private CrosshairHotkeyService? _crosshairHotkeyService;
+    private bool _crosshairVisible = true;
+    private volatile bool _stoppingCrosshair;
+
     // Training fields
     private TrainingDataManager? _trainingDataManager;
     private int _trainingCaptureCount;
@@ -136,6 +143,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private OverlayGroup? _selectedOverlayGroup;
 
+    // Crosshair properties
+    [ObservableProperty]
+    private bool _isCrosshairEnabled;
+
+    [ObservableProperty]
+    private bool _isCrosshairRunning;
+
+    [ObservableProperty]
+    private string _crosshairToggleHotkey = "Alt+C";
+
     // Post-processing properties
     [ObservableProperty]
     private bool _isPostProcessing;
@@ -174,6 +191,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Load saved feature toggle states
         IsScreenReaderEnabled = _appConfig.ScreenReaderEnabled;
         IsOverlayEnabled = _appConfig.OverlayEnabled;
+        IsCrosshairEnabled = _appConfig.CrosshairEnabled;
 
         Logger.Log("MainViewModel initialized");
     }
@@ -613,6 +631,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         UpdateHotkeyDisplay();
         RegisterHotkeys(); // Re-register hotkeys for the new game profile
         LoadOverlaySettings(); // Load overlay settings for the new game profile
+        LoadCrosshairSettings(); // Load crosshair settings for the new game profile
         LoadTrainingSettings(); // Load training settings for the new game profile
 
         // Save the selection
@@ -783,6 +802,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (IsOverlayEnabled)
             {
                 EnableOverlay();
+            }
+            if (IsCrosshairEnabled)
+            {
+                EnableCrosshair();
             }
 
             // Start waypoint timer if configured
@@ -1017,6 +1040,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     {
                         EnableOverlay();
                     }
+                    if (IsCrosshairEnabled)
+                    {
+                        EnableCrosshair();
+                    }
                 });
 
                 Logger.Log("OnWindowFound: Capture started successfully");
@@ -1058,6 +1085,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 {
                     _overlayWindow.Hide();
                 }
+
+                // Hide crosshair while waiting
+                if (IsCrosshairEnabled && _crosshairWindow != null)
+                {
+                    _crosshairWindow.Hide();
+                }
             });
         }
         catch (Exception ex)
@@ -1074,9 +1107,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         StopWindowPolling();
         StopWaypointTracker();
 
-        // Disable both features first
+        // Disable all features first
         DisableScreenReader();
         DisableOverlay();
+        DisableCrosshair();
 
         // Stop capture and detection
         if (_captureManager != null)
@@ -1450,14 +1484,38 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task OpenGameSettingsAsync()
     {
-        // Stop detection before changing settings
+        // Stop detection before changing settings (but keep crosshair for live preview)
         var wasRunning = IsEngineRunning;
+        var crosshairWasRunning = IsCrosshairRunning;
+
         if (wasRunning)
         {
-            StopEngine();
+            // Disable screen reader and overlay, but keep crosshair for preview
+            DisableScreenReader();
+            DisableOverlay();
+
+            // Stop capture and detection
+            StopWindowPolling();
+            StopWaypointTracker();
+            _captureManager?.Stop();
+            IsEngineRunning = false;
+            DetectionStatus = "Settings";
         }
 
-        var settingsWindow = new Views.GameSettingsWindow(_appConfig, _configManager);
+        // Create callback for live crosshair preview updates
+        Action<CrosshairSettings>? crosshairPreviewCallback = null;
+        if (crosshairWasRunning && _crosshairRenderer != null)
+        {
+            crosshairPreviewCallback = (settings) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    _crosshairRenderer?.UpdateSettings(settings);
+                });
+            };
+        }
+
+        var settingsWindow = new Views.GameSettingsWindow(_appConfig, _configManager, crosshairPreviewCallback);
         settingsWindow.Owner = System.Windows.Application.Current.MainWindow;
 
         if (settingsWindow.ShowDialog() == true)
@@ -1478,6 +1536,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 await StartEngineAsync();
             }
+        }
+        else
+        {
+            // User cancelled - restore crosshair to original settings
+            if (crosshairWasRunning)
+            {
+                var profile = GetSelectedGameProfile();
+                var settings = profile?.Crosshair ?? new CrosshairSettings();
+                _crosshairRenderer?.UpdateSettings(settings);
+            }
+        }
+
+        // Clean up crosshair if engine is not restarting
+        if (!wasRunning && crosshairWasRunning)
+        {
+            DisableCrosshair();
         }
     }
 
@@ -1770,6 +1844,123 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     #endregion
 
+    #region Crosshair Enable/Disable
+
+    /// <summary>
+    /// Loads crosshair settings from the current game profile.
+    /// </summary>
+    private void LoadCrosshairSettings()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile?.Crosshair == null)
+        {
+            CrosshairToggleHotkey = "Alt+C";
+            return;
+        }
+
+        // Crosshair toggle hotkey is stored in app config, not per-game
+        // But we could add per-game hotkey later if needed
+    }
+
+    private void EnableCrosshair()
+    {
+        if (!IsEngineRunning || IsCrosshairRunning) return;
+
+        Logger.Log("Enabling crosshair");
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Create crosshair window
+        _crosshairWindow = new CrosshairWindow();
+        _crosshairRenderer = new CrosshairRenderer(_crosshairWindow.Canvas);
+
+        // Position on correct monitor (matches overlay behavior)
+        var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
+        _crosshairWindow.PositionOverMonitor(monitorIndex);
+        _crosshairWindow.Show();
+
+        // Set DPI scale and draw crosshair
+        _crosshairRenderer.DpiScale = _crosshairWindow.DpiScale;
+
+        // Get crosshair settings (use defaults if not configured)
+        var settings = profile.Crosshair ?? new CrosshairSettings();
+        _crosshairRenderer.UpdateSettings(settings);
+
+        // Register crosshair hotkey
+        var hotkey = CrosshairToggleHotkey;
+        _crosshairHotkeyService = new CrosshairHotkeyService(hotkey);
+        _crosshairHotkeyService.HotkeyPressed += OnCrosshairHotkeyPressed;
+        _crosshairHotkeyService.Start();
+
+        _crosshairVisible = true;
+        IsCrosshairRunning = true;
+        Logger.Log("Crosshair enabled");
+    }
+
+    private void DisableCrosshair()
+    {
+        if (_stoppingCrosshair || !IsCrosshairRunning) return;
+
+        try
+        {
+            _stoppingCrosshair = true;
+            Logger.Log("Disabling crosshair");
+
+            _crosshairHotkeyService?.Stop();
+            _crosshairHotkeyService?.Dispose();
+            _crosshairHotkeyService = null;
+
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                _crosshairWindow?.Close();
+                _crosshairWindow = null;
+            });
+
+            _crosshairRenderer = null;
+            IsCrosshairRunning = false;
+
+            Logger.Log("Crosshair disabled");
+        }
+        finally
+        {
+            _stoppingCrosshair = false;
+        }
+    }
+
+    private void OnCrosshairHotkeyPressed(object? sender, EventArgs e)
+    {
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            _crosshairVisible = !_crosshairVisible;
+            if (_crosshairWindow != null)
+            {
+                if (_crosshairVisible)
+                {
+                    _crosshairWindow.Show();
+                }
+                else
+                {
+                    _crosshairWindow.Hide();
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Refreshes the crosshair display with current settings.
+    /// Call this after settings are changed in Game Settings.
+    /// </summary>
+    public void RefreshCrosshair()
+    {
+        if (!IsCrosshairRunning || _crosshairRenderer == null) return;
+
+        var profile = GetSelectedGameProfile();
+        var settings = profile?.Crosshair ?? new CrosshairSettings();
+        _crosshairRenderer.UpdateSettings(settings);
+    }
+
+    #endregion
+
     #region Property Change Handlers
 
     partial void OnIsScreenReaderEnabledChanged(bool value)
@@ -1807,6 +1998,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Save setting
         _appConfig.OverlayEnabled = value;
+        _ = _configManager.SaveAppSettingsAsync(_appConfig);
+    }
+
+    partial void OnIsCrosshairEnabledChanged(bool value)
+    {
+        if (IsEngineRunning)
+        {
+            if (value)
+            {
+                EnableCrosshair();
+            }
+            else
+            {
+                DisableCrosshair();
+            }
+        }
+
+        // Save setting
+        _appConfig.CrosshairEnabled = value;
         _ = _configManager.SaveAppSettingsAsync(_appConfig);
     }
 
@@ -2261,6 +2471,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Clean up overlay resources
         _overlayHotkeyService?.Dispose();
+
+        // Clean up crosshair resources
+        _crosshairHotkeyService?.Dispose();
 
         GC.SuppressFinalize(this);
     }

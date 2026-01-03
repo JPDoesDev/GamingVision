@@ -175,5 +175,15 @@
     "label": "wp-ext-elv",
     "mode": "sonar",
     "readIntervalSeconds": 2
+  },
+  "crosshair": {
+    "offsetX": 0,
+    "offsetY": 0,
+    "shape": "Circle",
+    "color": "#FFFFFF",
+    "outlineColor": "#000000",
+    "size": 50,
+    "thickness": 2,
+    "outlineThickness": 5
   }
 }

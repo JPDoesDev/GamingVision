@@ -95,6 +95,11 @@ public class GameProfile
     public WaypointSettings? Waypoint { get; set; }
 
     /// <summary>
+    /// Crosshair overlay settings for high-contrast aiming assistance.
+    /// </summary>
+    public CrosshairSettings? Crosshair { get; set; }
+
+    /// <summary>
     /// Creates a deep copy of this game profile.
     /// </summary>
     public GameProfile Clone() => new()
@@ -115,6 +120,7 @@ public class GameProfile
         Detection = Detection.Clone(),
         Overlay = Overlay?.Clone(),
         Training = Training?.Clone(),
-        Waypoint = Waypoint?.Clone()
+        Waypoint = Waypoint?.Clone(),
+        Crosshair = Crosshair?.Clone()
     };
 }

@@ -61,6 +61,11 @@ public class AppConfiguration
     public bool OverlayEnabled { get; set; } = false;
 
     /// <summary>
+    /// Enable crosshair overlay when engine is running.
+    /// </summary>
+    public bool CrosshairEnabled { get; set; } = false;
+
+    /// <summary>
     /// Creates default app configuration.
     /// </summary>
     public static AppConfiguration CreateDefault() => new()
@@ -75,6 +80,7 @@ public class AppConfiguration
         LogFilePath = "logs/gamingvision.log",
         CheckForUpdates = true,
         ScreenReaderEnabled = true,
-        OverlayEnabled = false
+        OverlayEnabled = false,
+        CrosshairEnabled = false
     };
 }

@@ -151,10 +151,98 @@ public partial class GameSettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _readTertiaryLabelAloud = false;
 
-    public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager)
+    // Crosshair settings
+    [ObservableProperty]
+    private int _crosshairOffsetX;
+
+    [ObservableProperty]
+    private int _crosshairOffsetY;
+
+    [ObservableProperty]
+    private string _crosshairShape = "Circle";
+
+    [ObservableProperty]
+    private int _crosshairSize = 20;
+
+    [ObservableProperty]
+    private int _crosshairColorRed = 255;
+
+    [ObservableProperty]
+    private int _crosshairColorGreen = 255;
+
+    [ObservableProperty]
+    private int _crosshairColorBlue = 255;
+
+    [ObservableProperty]
+    private int _crosshairThickness = 2;
+
+    [ObservableProperty]
+    private int _crosshairOutlineRed;
+
+    [ObservableProperty]
+    private int _crosshairOutlineGreen;
+
+    [ObservableProperty]
+    private int _crosshairOutlineBlue;
+
+    [ObservableProperty]
+    private int _crosshairOutlineThickness = 1;
+
+    /// <summary>
+    /// Gets the crosshair color as a hex string for preview binding.
+    /// </summary>
+    public string CrosshairColor => $"#{CrosshairColorRed:X2}{CrosshairColorGreen:X2}{CrosshairColorBlue:X2}";
+
+    /// <summary>
+    /// Gets the crosshair outline color as a hex string for preview binding.
+    /// </summary>
+    public string CrosshairOutlineColor => $"#{CrosshairOutlineRed:X2}{CrosshairOutlineGreen:X2}{CrosshairOutlineBlue:X2}";
+
+    // Notify color preview when RGB values change and trigger live crosshair update
+    partial void OnCrosshairColorRedChanged(int value) { OnPropertyChanged(nameof(CrosshairColor)); NotifyCrosshairPreview(); }
+    partial void OnCrosshairColorGreenChanged(int value) { OnPropertyChanged(nameof(CrosshairColor)); NotifyCrosshairPreview(); }
+    partial void OnCrosshairColorBlueChanged(int value) { OnPropertyChanged(nameof(CrosshairColor)); NotifyCrosshairPreview(); }
+    partial void OnCrosshairOutlineRedChanged(int value) { OnPropertyChanged(nameof(CrosshairOutlineColor)); NotifyCrosshairPreview(); }
+    partial void OnCrosshairOutlineGreenChanged(int value) { OnPropertyChanged(nameof(CrosshairOutlineColor)); NotifyCrosshairPreview(); }
+    partial void OnCrosshairOutlineBlueChanged(int value) { OnPropertyChanged(nameof(CrosshairOutlineColor)); NotifyCrosshairPreview(); }
+
+    // Trigger live crosshair update for other properties
+    partial void OnCrosshairOffsetXChanged(int value) => NotifyCrosshairPreview();
+    partial void OnCrosshairOffsetYChanged(int value) => NotifyCrosshairPreview();
+    partial void OnCrosshairShapeChanged(string value) => NotifyCrosshairPreview();
+    partial void OnCrosshairSizeChanged(int value) => NotifyCrosshairPreview();
+    partial void OnCrosshairThicknessChanged(int value) => NotifyCrosshairPreview();
+    partial void OnCrosshairOutlineThicknessChanged(int value) => NotifyCrosshairPreview();
+
+    /// <summary>
+    /// Notifies the crosshair preview callback with current settings.
+    /// </summary>
+    private void NotifyCrosshairPreview()
+    {
+        if (_crosshairPreviewCallback == null) return;
+
+        var settings = new CrosshairSettings
+        {
+            OffsetX = CrosshairOffsetX,
+            OffsetY = CrosshairOffsetY,
+            Shape = CrosshairShape,
+            Size = CrosshairSize,
+            Color = CrosshairColor,
+            OutlineColor = CrosshairOutlineColor,
+            Thickness = CrosshairThickness,
+            OutlineThickness = CrosshairOutlineThickness
+        };
+
+        _crosshairPreviewCallback(settings);
+    }
+
+    private readonly Action<CrosshairSettings>? _crosshairPreviewCallback;
+
+    public GameSettingsViewModel(AppConfiguration appConfig, ConfigManager configManager, Action<CrosshairSettings>? crosshairPreviewCallback = null)
     {
         _appConfig = appConfig;
         _configManager = configManager;
+        _crosshairPreviewCallback = crosshairPreviewCallback;
 
         LoadAvailableVoices();
         LoadGames();
@@ -263,6 +351,45 @@ public partial class GameSettingsViewModel : ObservableObject
         ReadPrimaryLabelAloud = _currentProfile.Detection.ReadPrimaryLabelAloud;
         ReadSecondaryLabelAloud = _currentProfile.Detection.ReadSecondaryLabelAloud;
         ReadTertiaryLabelAloud = _currentProfile.Detection.ReadTertiaryLabelAloud;
+
+        // Crosshair
+        var crosshair = _currentProfile.Crosshair ?? new CrosshairSettings();
+        CrosshairOffsetX = crosshair.OffsetX;
+        CrosshairOffsetY = crosshair.OffsetY;
+        CrosshairShape = crosshair.Shape;
+        CrosshairSize = crosshair.Size;
+        CrosshairThickness = crosshair.Thickness;
+        CrosshairOutlineThickness = crosshair.OutlineThickness;
+
+        // Parse crosshair color
+        ParseHexColor(crosshair.Color, out int cr, out int cg, out int cb);
+        CrosshairColorRed = cr;
+        CrosshairColorGreen = cg;
+        CrosshairColorBlue = cb;
+
+        // Parse outline color
+        ParseHexColor(crosshair.OutlineColor, out int or, out int og, out int ob);
+        CrosshairOutlineRed = or;
+        CrosshairOutlineGreen = og;
+        CrosshairOutlineBlue = ob;
+    }
+
+    private static void ParseHexColor(string hex, out int r, out int g, out int b)
+    {
+        r = g = b = 0;
+        if (string.IsNullOrEmpty(hex)) return;
+
+        try
+        {
+            hex = hex.TrimStart('#');
+            if (hex.Length == 6)
+            {
+                r = Convert.ToInt32(hex.Substring(0, 2), 16);
+                g = Convert.ToInt32(hex.Substring(2, 2), 16);
+                b = Convert.ToInt32(hex.Substring(4, 2), 16);
+            }
+        }
+        catch { /* ignore parse errors */ }
     }
 
     private void SaveProfileSettings()
@@ -319,6 +446,17 @@ public partial class GameSettingsViewModel : ObservableObject
         _currentProfile.Detection.ReadPrimaryLabelAloud = ReadPrimaryLabelAloud;
         _currentProfile.Detection.ReadSecondaryLabelAloud = ReadSecondaryLabelAloud;
         _currentProfile.Detection.ReadTertiaryLabelAloud = ReadTertiaryLabelAloud;
+
+        // Crosshair
+        _currentProfile.Crosshair ??= new CrosshairSettings();
+        _currentProfile.Crosshair.OffsetX = CrosshairOffsetX;
+        _currentProfile.Crosshair.OffsetY = CrosshairOffsetY;
+        _currentProfile.Crosshair.Shape = CrosshairShape;
+        _currentProfile.Crosshair.Size = CrosshairSize;
+        _currentProfile.Crosshair.Thickness = CrosshairThickness;
+        _currentProfile.Crosshair.OutlineThickness = CrosshairOutlineThickness;
+        _currentProfile.Crosshair.Color = CrosshairColor;
+        _currentProfile.Crosshair.OutlineColor = CrosshairOutlineColor;
     }
 
     private void UpdateLabelDisplays()

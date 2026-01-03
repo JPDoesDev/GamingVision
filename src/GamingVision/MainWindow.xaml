@@ -203,25 +203,38 @@
                     </Grid.RowDefinitions>
 
                     <!-- Enable Overlay Checkbox -->
-                    <CheckBox Grid.Row="0"
-                              Content="Enable Overlay"
-                              IsChecked="{Binding IsOverlayEnabled}"
-                              HorizontalAlignment="Center"
-                              FontWeight="Bold"
-                              Margin="0,0,0,15"
-                              AutomationProperties.Name="Enable Overlay"/>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,15">
+                        <CheckBox Content="Enable Overlay"
+                                  IsChecked="{Binding IsOverlayEnabled}"
+                                  FontWeight="Bold"
+                                  Margin="0,0,20,0"
+                                  AutomationProperties.Name="Enable Overlay"/>
+                        <CheckBox Content="Enable Crosshair"
+                                  IsChecked="{Binding IsCrosshairEnabled}"
+                                  FontWeight="Bold"
+                                  AutomationProperties.Name="Enable Crosshair"/>
+                    </StackPanel>
 
                     <!-- Overlay Settings -->
                     <GroupBox Header="Overlay Settings" Grid.Row="1">
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Toggle Hotkey:" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1"
+                            <TextBlock Grid.Row="0" Text="Overlay Toggle Hotkey:" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="0" Grid.Column="1"
                                      Text="{Binding OverlayToggleHotkey, UpdateSourceTrigger=PropertyChanged}"
                                      MaxLength="20"/>
+                            <TextBlock Grid.Row="1" Text="Crosshair Toggle Hotkey:" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                            <TextBox Grid.Row="1" Grid.Column="1"
+                                     Text="{Binding CrosshairToggleHotkey, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="20"
+                                     Margin="0,10,0,0"/>
                         </Grid>
                     </GroupBox>
 

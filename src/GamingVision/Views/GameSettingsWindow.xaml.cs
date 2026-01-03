@@ -12,11 +12,11 @@ public partial class GameSettingsWindow : Window
 {
     private readonly GameSettingsViewModel _viewModel;
 
-    public GameSettingsWindow(AppConfiguration config, ConfigManager configManager)
+    public GameSettingsWindow(AppConfiguration config, ConfigManager configManager, Action<CrosshairSettings>? crosshairPreviewCallback = null)
     {
         InitializeComponent();
 
-        _viewModel = new GameSettingsViewModel(config, configManager);
+        _viewModel = new GameSettingsViewModel(config, configManager, crosshairPreviewCallback);
         DataContext = _viewModel;
     }
 
