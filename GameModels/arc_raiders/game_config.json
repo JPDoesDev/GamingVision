@@ -102,7 +102,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "window",
+    "method": "fullscreen",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -124,7 +124,7 @@
   "detection": {
     "autoReadCooldown": 2500,
     "confidenceThreshold": 0.2,
-    "autoReadConfidenceThreshold": 0.3,
+    "autoReadConfidenceThreshold": 0.2,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
@@ -148,7 +148,7 @@
         "thickness": 10,
         "showLabel": false,
         "style": "highContrastBlack",
-        "confidenceThreshold": 0.05
+        "confidenceThreshold": 0.1
       },
       {
         "name": "Arc",
@@ -169,5 +169,11 @@
     "dataPath": "D:\\Dev\\Training_Data\\New_Arc_Raiders",
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.1
+  },
+  "waypoint": {
+    "enabled": true,
+    "label": "wp-ext-elv",
+    "mode": "sonar",
+    "readIntervalSeconds": 2
   }
 }
