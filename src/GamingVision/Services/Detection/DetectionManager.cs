@@ -353,15 +353,19 @@ public class DetectionManager : IDisposable
     /// <summary>
     /// Gets the current detection for a specific waypoint label.
     /// Used by the waypoint timer to read waypoints independently.
+    /// Filters by auto-read confidence threshold.
     /// </summary>
     public DetectedObject? GetWaypointDetection(string waypointLabel)
     {
-        if (string.IsNullOrEmpty(waypointLabel))
+        if (string.IsNullOrEmpty(waypointLabel) || _currentProfile == null)
             return null;
+
+        var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
 
         lock (_detectionLock)
         {
-            return _lastDetections.FirstOrDefault(d => d.Label == waypointLabel);
+            return _lastDetections.FirstOrDefault(d =>
+                d.Label == waypointLabel && d.Confidence >= autoReadThreshold);
         }
     }
 

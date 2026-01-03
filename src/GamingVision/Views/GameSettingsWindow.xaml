@@ -326,12 +326,12 @@
                             <TextBlock Text="{Binding AutoReadCooldown, StringFormat={}{0} ms}" Margin="15,0,0,0" Width="70" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-Read Confidence:" VerticalAlignment="Center" Margin="0,8"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Auto-read / Waypoint:" VerticalAlignment="Center" Margin="0,8"/>
                         <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="15,5">
                             <Slider Width="180" Minimum="0.1" Maximum="0.9" Value="{Binding AutoReadConfidenceThreshold}"
                                     TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                    AutomationProperties.Name="Auto-Read Confidence Threshold"
-                                    AutomationProperties.HelpText="Higher values reduce false positives during automatic reading"/>
+                                    AutomationProperties.Name="Auto-read and Waypoint Confidence Threshold"
+                                    AutomationProperties.HelpText="Higher values reduce false positives during automatic reading and waypoint tracking"/>
                             <TextBlock Text="{Binding AutoReadConfidenceThreshold, StringFormat={}{0:F1}}" Margin="15,0,0,0" Width="40" VerticalAlignment="Center"/>
                         </StackPanel>
 
