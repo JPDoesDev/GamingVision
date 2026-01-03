@@ -354,6 +354,7 @@ public class DetectionManager : IDisposable
     /// Gets the current detection for a specific waypoint label.
     /// Used by the waypoint timer to read waypoints independently.
     /// Filters by auto-read confidence threshold.
+    /// If multiple waypoints are detected, returns the one closest to screen center.
     /// </summary>
     public DetectedObject? GetWaypointDetection(string waypointLabel)
     {
@@ -364,8 +365,27 @@ public class DetectionManager : IDisposable
 
         lock (_detectionLock)
         {
-            return _lastDetections.FirstOrDefault(d =>
-                d.Label == waypointLabel && d.Confidence >= autoReadThreshold);
+            var candidates = _lastDetections
+                .Where(d => d.Label == waypointLabel && d.Confidence >= autoReadThreshold)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return null;
+
+            if (candidates.Count == 1)
+                return candidates[0];
+
+            // Multiple waypoints detected - return the one closest to screen center
+            float centerX = _lastFrameWidth / 2f;
+            float centerY = _lastFrameHeight / 2f;
+
+            return candidates
+                .OrderBy(d => {
+                    float dx = d.CenterX - centerX;
+                    float dy = d.CenterY - centerY;
+                    return dx * dx + dy * dy; // Squared distance (no need for sqrt)
+                })
+                .First();
         }
     }
 
