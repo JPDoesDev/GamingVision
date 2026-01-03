@@ -48,6 +48,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private TrainingDataManager? _trainingDataManager;
     private int _trainingCaptureCount;
 
+    // Window polling fields for waiting/recovery
+    private CancellationTokenSource? _windowPollingCts;
+    private Task? _windowPollingTask;
+
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
 
@@ -56,6 +60,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isEngineRunning;
+
+    [ObservableProperty]
+    private bool _isWaitingForWindow;
 
     [ObservableProperty]
     private bool _isScreenReaderEnabled = true;
@@ -719,18 +726,39 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _captureManager?.Dispose();
         _captureManager = new ScreenCaptureManager();
         _captureManager.FrameCaptured += OnFrameCaptured;
+        _captureManager.WindowFound += OnWindowFound;
+        _captureManager.WindowLost += OnWindowLost;
 
         DetectionStatus = "Finding window...";
 
         if (!_captureManager.Initialize(profile))
         {
-            DetectionStatus = $"Window not found: {profile.WindowTitle}";
+            DetectionStatus = "Failed to initialize capture";
             return;
         }
 
-        if (await _captureManager.StartAsync())
+        // Check if we're waiting for a window to appear
+        if (_captureManager.IsWaitingForWindow)
         {
             IsEngineRunning = true;
+            IsWaitingForWindow = true;
+            DetectionStatus = $"Waiting for: {profile.WindowTitle}";
+            _frameCount = 0;
+            _detectionCount = 0;
+            CurrentDetectionCount = 0;
+
+            // Initialize training data manager
+            InitializeTrainingDataManager(profile);
+
+            // Start window polling loop
+            StartWindowPolling();
+
+            Logger.Log($"Engine started in waiting mode for window: {profile.WindowTitle}");
+        }
+        else if (await _captureManager.StartAsync())
+        {
+            IsEngineRunning = true;
+            IsWaitingForWindow = false;
             DetectionStatus = "Running";
             _frameCount = 0;
             _detectionCount = 0;
@@ -738,6 +766,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             // Initialize training data manager
             InitializeTrainingDataManager(profile);
+
+            // Start window monitoring (for window loss detection)
+            StartWindowPolling();
 
             // Enable features based on saved settings
             if (IsScreenReaderEnabled)
@@ -755,16 +786,178 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts the window polling loop for waiting/recovery.
+    /// </summary>
+    private void StartWindowPolling()
+    {
+        StopWindowPolling();
+
+        _windowPollingCts = new CancellationTokenSource();
+        _windowPollingTask = Task.Run(() => WindowPollingLoopAsync(_windowPollingCts.Token));
+    }
+
+    /// <summary>
+    /// Stops the window polling loop.
+    /// </summary>
+    private void StopWindowPolling()
+    {
+        _windowPollingCts?.Cancel();
+        _windowPollingCts?.Dispose();
+        _windowPollingCts = null;
+        _windowPollingTask = null;
+    }
+
+    /// <summary>
+    /// Background loop that polls for window availability and health.
+    /// </summary>
+    private async Task WindowPollingLoopAsync(CancellationToken cancellationToken)
+    {
+        const int pollingIntervalMs = 1500; // Check every 1.5 seconds
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(pollingIntervalMs, cancellationToken);
+
+                if (_captureManager == null)
+                    break;
+
+                if (_captureManager.IsWaitingForWindow)
+                {
+                    // Try to find the window
+                    if (_captureManager.TryFindWindow())
+                    {
+                        // Window was found - start capture
+                        Logger.Log("WindowPollingLoop: Window found, starting capture");
+                        // The WindowFound event handler will be called by TryFindWindow
+                    }
+                }
+                else if (_captureManager.IsCapturing)
+                {
+                    // Check if window is still valid
+                    if (_captureManager.RequiresWindow)
+                    {
+                        // Also check for stalled capture (no frames arriving)
+                        if (_captureManager.IsCaptureStalled(3.0))
+                        {
+                            Logger.Log("WindowPollingLoop: Capture appears stalled, checking window");
+                            _captureManager.CheckWindowStillValid();
+                        }
+                        else
+                        {
+                            // Periodically validate window is still there
+                            _captureManager.CheckWindowStillValid();
+                        }
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WindowPollingLoop error", ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles the WindowFound event from ScreenCaptureManager.
+    /// </summary>
+    private async void OnWindowFound(object? sender, EventArgs e)
+    {
+        Logger.Log("OnWindowFound: Window appeared, starting capture");
+
+        try
+        {
+            if (_captureManager != null && await _captureManager.StartAsync())
+            {
+                // Update UI on dispatcher thread
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+                {
+                    IsWaitingForWindow = false;
+                    DetectionStatus = "Running";
+
+                    // Enable features based on saved settings
+                    if (IsScreenReaderEnabled)
+                    {
+                        await EnableScreenReaderAsync();
+                    }
+                    if (IsOverlayEnabled)
+                    {
+                        EnableOverlay();
+                    }
+                });
+
+                Logger.Log("OnWindowFound: Capture started successfully");
+            }
+            else
+            {
+                Logger.Warn("OnWindowFound: Failed to start capture after window found");
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    DetectionStatus = "Failed to start capture";
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("OnWindowFound error", ex);
+        }
+    }
+
+    /// <summary>
+    /// Handles the WindowLost event from ScreenCaptureManager.
+    /// </summary>
+    private void OnWindowLost(object? sender, EventArgs e)
+    {
+        Logger.Log("OnWindowLost: Window disappeared, entering waiting mode");
+
+        try
+        {
+            // Update UI on dispatcher thread
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                IsWaitingForWindow = true;
+                var profile = GetSelectedGameProfile();
+                DetectionStatus = $"Waiting for: {profile?.WindowTitle ?? "window"}";
+                CurrentDetectionCount = 0;
+
+                // Disable overlay while waiting (no frames to render)
+                if (IsOverlayEnabled && _overlayWindow != null)
+                {
+                    _overlayWindow.Hide();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("OnWindowLost error", ex);
+        }
+    }
+
     private void StopEngine()
     {
         Logger.Log("Stopping engine");
+
+        // Stop window polling first
+        StopWindowPolling();
 
         // Disable both features first
         DisableScreenReader();
         DisableOverlay();
 
         // Stop capture and detection
-        _captureManager?.Stop();
+        if (_captureManager != null)
+        {
+            _captureManager.FrameCaptured -= OnFrameCaptured;
+            _captureManager.WindowFound -= OnWindowFound;
+            _captureManager.WindowLost -= OnWindowLost;
+            _captureManager.Stop();
+        }
 
         if (_detectionManager != null)
         {
@@ -774,6 +967,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         IsEngineRunning = false;
+        IsWaitingForWindow = false;
         DetectionStatus = "Stopped";
         CurrentDetectionCount = 0;
     }
@@ -783,6 +977,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             _frameCount++;
+
+            // Update frame timing for window loss detection
+            _captureManager?.UpdateLastFrameTime();
 
             // Extract frame ID and capture start for performance tracking
             var frameId = e.FrameId;

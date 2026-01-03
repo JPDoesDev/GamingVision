@@ -5,12 +5,15 @@ namespace GamingVision.Services.ScreenCapture;
 
 /// <summary>
 /// Manages screen capture based on game profile configuration.
+/// Supports waiting for windows that aren't open yet and auto-recovery when windows close.
 /// </summary>
 public class ScreenCaptureManager : IDisposable
 {
     private WindowsCaptureService? _captureService;
     private GameProfile? _currentProfile;
     private bool _disposed;
+    private IntPtr _currentWindowHandle;
+    private DateTime _lastFrameTime = DateTime.MinValue;
 
     /// <summary>
     /// Gets whether capture is currently running.
@@ -18,18 +21,50 @@ public class ScreenCaptureManager : IDisposable
     public bool IsCapturing => _captureService?.IsCapturing ?? false;
 
     /// <summary>
+    /// Gets whether we're waiting for a window to appear.
+    /// True when capture mode is "window" but the window hasn't been found yet.
+    /// </summary>
+    public bool IsWaitingForWindow { get; private set; }
+
+    /// <summary>
+    /// Gets the window title we're waiting for (if any).
+    /// </summary>
+    public string? WaitingForWindowTitle => IsWaitingForWindow ? _currentProfile?.WindowTitle : null;
+
+    /// <summary>
+    /// Gets whether capture mode requires a window (vs monitor capture).
+    /// </summary>
+    public bool RequiresWindow => _currentProfile?.Capture.Method == "window";
+
+    /// <summary>
     /// Event raised when a new frame is captured.
     /// </summary>
     public event EventHandler<CapturedFrame>? FrameCaptured;
 
     /// <summary>
+    /// Event raised when the target window is found after waiting.
+    /// </summary>
+    public event EventHandler? WindowFound;
+
+    /// <summary>
+    /// Event raised when the target window is lost during capture.
+    /// </summary>
+    public event EventHandler? WindowLost;
+
+    /// <summary>
     /// Initializes capture for the specified game profile.
+    /// For window capture mode, this will succeed even if the window isn't found yet.
+    /// Use IsWaitingForWindow to check if the window needs to be found before capture can start.
     /// </summary>
     /// <param name="profile">The game profile with capture settings.</param>
-    /// <returns>True if initialization succeeded.</returns>
+    /// <returns>True if initialization succeeded (always true for valid profiles).</returns>
     public bool Initialize(GameProfile profile)
     {
         _currentProfile = profile;
+        _currentWindowHandle = IntPtr.Zero;
+        IsWaitingForWindow = false;
+        _lastFrameTime = DateTime.MinValue;
+
         _captureService?.Dispose();
         _captureService = new WindowsCaptureService();
 
@@ -45,13 +80,17 @@ public class ScreenCaptureManager : IDisposable
                 var windowHandle = WindowFinder.FindWindowByTitle(profile.WindowTitle);
                 if (windowHandle != IntPtr.Zero)
                 {
+                    _currentWindowHandle = windowHandle;
                     _captureService.InitializeForWindow(windowHandle);
+                    Logger.Log($"ScreenCaptureManager: Window found immediately: {profile.WindowTitle}");
                     return true;
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"Window not found: {profile.WindowTitle}");
-                    return false;
+                    // Window not found - enter waiting state instead of failing
+                    IsWaitingForWindow = true;
+                    Logger.Log($"ScreenCaptureManager: Window not found, waiting for: {profile.WindowTitle}");
+                    return true; // Success - we're just waiting
                 }
             }
         }
@@ -117,7 +156,9 @@ public class ScreenCaptureManager : IDisposable
 
     /// <summary>
     /// Tries to find the game window again (useful if the game was launched after initialization).
+    /// If the window is found and we were waiting, fires WindowFound event.
     /// </summary>
+    /// <returns>True if window was found (or not needed for monitor capture).</returns>
     public bool TryFindWindow()
     {
         if (_currentProfile == null || _captureService == null)
@@ -129,11 +170,115 @@ public class ScreenCaptureManager : IDisposable
         var windowHandle = WindowFinder.FindWindowByTitle(_currentProfile.WindowTitle);
         if (windowHandle != IntPtr.Zero)
         {
+            var wasWaiting = IsWaitingForWindow;
+            _currentWindowHandle = windowHandle;
+            IsWaitingForWindow = false;
             _captureService.InitializeForWindow(windowHandle);
+
+            if (wasWaiting)
+            {
+                Logger.Log($"ScreenCaptureManager: Window found after waiting: {_currentProfile.WindowTitle}");
+                WindowFound?.Invoke(this, EventArgs.Empty);
+            }
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if the target window is still valid and visible.
+    /// If the window was lost, enters waiting state and fires WindowLost event.
+    /// </summary>
+    /// <returns>True if window is still valid, false if lost.</returns>
+    public bool CheckWindowStillValid()
+    {
+        if (_currentProfile == null)
+            return false;
+
+        // Monitor capture doesn't need window validation
+        if (_currentProfile.Capture.Method != "window")
+            return true;
+
+        // If we're already waiting, window is not valid
+        if (IsWaitingForWindow)
+            return false;
+
+        // Check if our captured window handle is still valid
+        if (_currentWindowHandle == IntPtr.Zero)
+            return false;
+
+        // Check if window still exists and is visible
+        if (!Native.User32.IsWindow(_currentWindowHandle) || !Native.User32.IsWindowVisible(_currentWindowHandle))
+        {
+            Logger.Log($"ScreenCaptureManager: Window lost: {_currentProfile.WindowTitle}");
+            HandleWindowLost();
+            return false;
+        }
+
+        // Also verify by title in case the same handle got reused for a different window
+        var currentTitle = WindowFinder.GetWindowTitle(_currentWindowHandle);
+        if (string.IsNullOrEmpty(currentTitle) ||
+            !currentTitle.Contains(_currentProfile.WindowTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            // Window title changed or window closed - try to find it again
+            var newHandle = WindowFinder.FindWindowByTitle(_currentProfile.WindowTitle);
+            if (newHandle == IntPtr.Zero)
+            {
+                Logger.Log($"ScreenCaptureManager: Window title changed or closed: {_currentProfile.WindowTitle}");
+                HandleWindowLost();
+                return false;
+            }
+            else if (newHandle != _currentWindowHandle)
+            {
+                // Window moved to a new handle (rare but possible)
+                Logger.Log($"ScreenCaptureManager: Window handle changed, reinitializing");
+                _currentWindowHandle = newHandle;
+                _captureService?.StopCapture();
+                _captureService?.InitializeForWindow(newHandle);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Handles the window being lost - stops capture and enters waiting state.
+    /// </summary>
+    private void HandleWindowLost()
+    {
+        _currentWindowHandle = IntPtr.Zero;
+        IsWaitingForWindow = true;
+
+        // Stop the current capture session
+        if (_captureService != null)
+        {
+            _captureService.FrameCaptured -= OnFrameCaptured;
+            _captureService.StopCapture();
+        }
+
+        WindowLost?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Updates the last frame time. Call this when a frame is received to track capture health.
+    /// </summary>
+    public void UpdateLastFrameTime()
+    {
+        _lastFrameTime = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Checks if frames have stopped arriving (potential window loss).
+    /// </summary>
+    /// <param name="timeoutSeconds">How long without frames before considering capture stalled.</param>
+    /// <returns>True if capture appears stalled.</returns>
+    public bool IsCaptureStalled(double timeoutSeconds = 2.0)
+    {
+        if (!IsCapturing || _lastFrameTime == DateTime.MinValue)
+            return false;
+
+        return (DateTime.UtcNow - _lastFrameTime).TotalSeconds > timeoutSeconds;
     }
 
     /// <summary>

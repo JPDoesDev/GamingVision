@@ -102,7 +102,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "fullscreen",
+    "method": "window",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,

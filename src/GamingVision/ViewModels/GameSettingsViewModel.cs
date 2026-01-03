@@ -207,9 +207,9 @@ public partial class GameSettingsViewModel : ObservableObject
         DisplayName = _currentProfile.DisplayName;
         ModelFile = _currentProfile.ModelFile;
 
-        // Refresh available windows and set the selected one
-        RefreshAvailableWindows();
+        // Set window title BEFORE refreshing so it can be preserved if window isn't open
         SelectedWindow = _currentProfile.WindowTitle;
+        RefreshAvailableWindows();
 
         // Load label lists
         _primaryLabelsList = [.. _currentProfile.PrimaryLabels];
