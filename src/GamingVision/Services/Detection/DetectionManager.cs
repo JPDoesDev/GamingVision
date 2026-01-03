@@ -390,6 +390,36 @@ public class DetectionManager : IDisposable
     }
 
     /// <summary>
+    /// Gets the current detection for a waypoint label optimized for sonar mode.
+    /// Filters by auto-read confidence threshold.
+    /// If multiple waypoints are detected, returns the one with narrowest width
+    /// (most likely to be the focused/targeted waypoint).
+    /// </summary>
+    public DetectedObject? GetSonarWaypointDetection(string waypointLabel)
+    {
+        if (string.IsNullOrEmpty(waypointLabel) || _currentProfile == null)
+            return null;
+
+        var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
+
+        lock (_detectionLock)
+        {
+            var candidates = _lastDetections
+                .Where(d => d.Label == waypointLabel && d.Confidence >= autoReadThreshold)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return null;
+
+            if (candidates.Count == 1)
+                return candidates[0];
+
+            // Multiple waypoints detected - return the one with narrowest width
+            return candidates.OrderBy(d => d.Width).First();
+        }
+    }
+
+    /// <summary>
     /// Starts tracking a label for disappearance detection.
     /// Call this when starting to read an object so we can detect when user moves away.
     /// </summary>

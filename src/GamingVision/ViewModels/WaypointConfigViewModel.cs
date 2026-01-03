@@ -35,11 +35,6 @@ public partial class WaypointConfigViewModel : ObservableObject
     public float MaxInterval => 10.0f;
 
     /// <summary>
-    /// Whether sonar mode is available (always false for now).
-    /// </summary>
-    public bool IsSonarAvailable => false;
-
-    /// <summary>
     /// Display text for the current interval.
     /// </summary>
     public string IntervalDisplay => $"{ReadIntervalSeconds:F1}s";

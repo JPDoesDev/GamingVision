@@ -46,15 +46,14 @@
                 <RadioButton Content="Read (OCR + TTS)"
                              IsChecked="{Binding Mode, Converter={StaticResource StringToBoolConverter}, ConverterParameter=read}"
                              Margin="0,5"/>
-                <RadioButton Content="Sonar (Audio feedback)"
-                             IsEnabled="{Binding IsSonarAvailable}"
-                             ToolTip="Coming soon"
+                <RadioButton Content="Sonar (Audio beep)"
+                             IsChecked="{Binding Mode, Converter={StaticResource StringToBoolConverter}, ConverterParameter=sonar}"
                              Margin="0,5"/>
             </StackPanel>
         </GroupBox>
 
-        <!-- Read Interval -->
-        <GroupBox Header="Read Interval" Grid.Row="2">
+        <!-- Interval -->
+        <GroupBox Header="Interval" Grid.Row="2">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -80,7 +79,7 @@
                            FontWeight="Bold"/>
 
                 <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
-                           Text="Time between automatic waypoint reads"
+                           Text="Minimum time between waypoint reads or beeps"
                            Foreground="{DynamicResource SecondaryTextBrush}"
                            FontSize="11"/>
             </Grid>
