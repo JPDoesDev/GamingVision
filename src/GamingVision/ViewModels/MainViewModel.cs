@@ -52,6 +52,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _windowPollingCts;
     private Task? _windowPollingTask;
 
+    // Waypoint timer fields
+    private System.Timers.Timer? _waypointTimer;
+    private WaypointSettings? _waypointSettings;
+
     [ObservableProperty]
     private ObservableCollection<GameProfileItem> _games = [];
 
@@ -779,10 +783,116 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 EnableOverlay();
             }
+
+            // Start waypoint timer if configured
+            InitializeWaypointTracker(profile);
         }
         else
         {
             DetectionStatus = "Failed to start capture";
+        }
+    }
+
+    /// <summary>
+    /// Initializes the waypoint tracker timer.
+    /// </summary>
+    private void InitializeWaypointTracker(GameProfile profile)
+    {
+        StopWaypointTracker();
+
+        _waypointSettings = profile.Waypoint;
+        if (_waypointSettings == null || !_waypointSettings.Enabled ||
+            string.IsNullOrEmpty(_waypointSettings.Label))
+        {
+            Logger.Log("WaypointTracker: Not enabled or no label configured");
+            return;
+        }
+
+        var intervalMs = _waypointSettings.ReadIntervalSeconds * 1000;
+        _waypointTimer = new System.Timers.Timer(intervalMs);
+        _waypointTimer.Elapsed += OnWaypointTimerElapsed;
+        _waypointTimer.AutoReset = true;
+        _waypointTimer.Start();
+
+        Logger.Log($"WaypointTracker: Started for '{_waypointSettings.Label}' @ {_waypointSettings.ReadIntervalSeconds}s");
+    }
+
+    /// <summary>
+    /// Stops the waypoint tracker timer.
+    /// </summary>
+    private void StopWaypointTracker()
+    {
+        if (_waypointTimer != null)
+        {
+            _waypointTimer.Stop();
+            _waypointTimer.Elapsed -= OnWaypointTimerElapsed;
+            _waypointTimer.Dispose();
+            _waypointTimer = null;
+        }
+        _waypointSettings = null;
+    }
+
+    /// <summary>
+    /// Handles the waypoint timer elapsed event.
+    /// </summary>
+    private async void OnWaypointTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        await ReadWaypointAsync();
+    }
+
+    /// <summary>
+    /// Reads the waypoint label via OCR and speaks it.
+    /// </summary>
+    private async Task ReadWaypointAsync()
+    {
+        if (_detectionManager == null || _waypointSettings == null || _ttsService == null || !_ttsService.IsReady)
+            return;
+
+        // Skip if we're waiting for window
+        if (IsWaitingForWindow)
+            return;
+
+        var waypointLabel = _waypointSettings.Label;
+
+        // Get the waypoint detection
+        var waypointDetection = _detectionManager.GetWaypointDetection(waypointLabel);
+        if (waypointDetection == null)
+        {
+            // Waypoint not detected - skip silently
+            return;
+        }
+
+        // Get frame for OCR
+        CapturedFrame? frame;
+        lock (_frameLock)
+        {
+            frame = _latestFrame;
+        }
+
+        if (frame == null || frame.IsDisposed || _ocrService == null || !_ocrService.IsReady)
+            return;
+
+        try
+        {
+            // Run OCR on waypoint bounding box
+            var regions = new List<OcrRegion> { OcrRegion.FromDetection(waypointDetection) };
+            var textResults = await _ocrService.ExtractTextFromRegionsAsync(
+                frame.Data, frame.Width, frame.Height, frame.Stride, regions);
+
+            if (textResults.TryGetValue(waypointLabel, out var text) && !string.IsNullOrWhiteSpace(text))
+            {
+                Logger.Log($"WaypointTracker: Reading '{text}'");
+
+                // Speak with primary voice (don't interrupt current speech)
+                if (!_ttsService.IsSpeaking)
+                {
+                    await SpeakWithVoiceAsync(text, SpeechTier.Primary, waypointDetection, frame.Width, interrupt: false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("WaypointTracker: Error reading waypoint", ex);
         }
     }
 
@@ -943,8 +1053,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Logger.Log("Stopping engine");
 
-        // Stop window polling first
+        // Stop timers first
         StopWindowPolling();
+        StopWaypointTracker();
 
         // Disable both features first
         DisableScreenReader();
@@ -1139,8 +1250,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ttsService?.Stop();
         _ttsService?.ClearQueue();
 
-        // Reset the auto-read cooldown so a new object can be read immediately
-        _detectionManager?.ResetCooldown();
+        // Reset position tracking so the next detection triggers auto-read
+        _detectionManager?.ResetPositionTracking();
     }
 
     private async void OnPrimaryObjectChanged(object? sender, PrimaryObjectChangedEventArgs e)

@@ -1,0 +1,95 @@
+<Window x:Class="GamingVision.Views.WaypointConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:GamingVision.Converters"
+        Title="Waypoint Tracker Settings"
+        Width="400"
+        Height="500"
+        MinWidth="350"
+        MinHeight="475"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Waypoint Tracker Settings Window">
+
+    <Window.Resources>
+        <converters:StringToBoolConverter x:Key="StringToBoolConverter"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Waypoint Label Selection -->
+        <GroupBox Header="Waypoint Label" Grid.Row="0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Label:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableLabels}"
+                          SelectedItem="{Binding SelectedLabel}"
+                          Margin="0,5"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Mode Selection -->
+        <GroupBox Header="Mode" Grid.Row="1">
+            <StackPanel>
+                <RadioButton Content="Read (OCR + TTS)"
+                             IsChecked="{Binding Mode, Converter={StaticResource StringToBoolConverter}, ConverterParameter=read}"
+                             Margin="0,5"/>
+                <RadioButton Content="Sonar (Audio feedback)"
+                             IsEnabled="{Binding IsSonarAvailable}"
+                             ToolTip="Coming soon"
+                             Margin="0,5"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Read Interval -->
+        <GroupBox Header="Read Interval" Grid.Row="2">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="60"/>
+                </Grid.ColumnDefinitions>
+
+                <Slider Grid.Row="0" Grid.Column="0"
+                        Minimum="{Binding MinInterval}"
+                        Maximum="{Binding MaxInterval}"
+                        Value="{Binding ReadIntervalSeconds}"
+                        TickFrequency="0.5"
+                        IsSnapToTickEnabled="True"
+                        VerticalAlignment="Center"
+                        Margin="0,5,10,5"/>
+                <TextBlock Grid.Row="0" Grid.Column="1"
+                           Text="{Binding IntervalDisplay}"
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           FontWeight="Bold"/>
+
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                           Text="Time between automatic waypoint reads"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           FontSize="11"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Save" Click="Save_Click" MinWidth="80" IsDefault="True" Margin="0,0,10,0"/>
+            <Button Content="Cancel" Click="Cancel_Click" MinWidth="80" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

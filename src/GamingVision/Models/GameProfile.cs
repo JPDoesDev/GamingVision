@@ -90,6 +90,11 @@ public class GameProfile
     public TrainingSettings? Training { get; set; }
 
     /// <summary>
+    /// Waypoint tracking settings for timer-based reading of a specific label.
+    /// </summary>
+    public WaypointSettings? Waypoint { get; set; }
+
+    /// <summary>
     /// Creates a deep copy of this game profile.
     /// </summary>
     public GameProfile Clone() => new()
@@ -109,6 +114,7 @@ public class GameProfile
         Tts = Tts.Clone(),
         Detection = Detection.Clone(),
         Overlay = Overlay?.Clone(),
-        Training = Training?.Clone()
+        Training = Training?.Clone(),
+        Waypoint = Waypoint?.Clone()
     };
 }
