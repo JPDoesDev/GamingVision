@@ -162,7 +162,7 @@ public partial class GameSettingsViewModel : ObservableObject
     private string _crosshairShape = "Circle";
 
     [ObservableProperty]
-    private int _crosshairSize = 20;
+    private int _crosshairSize = 50;
 
     [ObservableProperty]
     private int _crosshairColorRed = 255;

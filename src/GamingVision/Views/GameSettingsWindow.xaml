@@ -421,7 +421,6 @@
                                   SelectedValuePath="Tag"
                                   Margin="15,5,0,5"
                                   AutomationProperties.Name="Crosshair Shape">
-                            <ComboBoxItem Content="Cross" Tag="Cross"/>
                             <ComboBoxItem Content="Circle" Tag="Circle"/>
                             <ComboBoxItem Content="Box" Tag="Box"/>
                         </ComboBox>
@@ -429,7 +428,7 @@
                         <!-- Size -->
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Size:" VerticalAlignment="Center" Margin="0,8"/>
                         <Slider Grid.Row="3" Grid.Column="1"
-                                Minimum="5" Maximum="100"
+                                Minimum="50" Maximum="100"
                                 Value="{Binding CrosshairSize}"
                                 TickFrequency="5"
                                 IsSnapToTickEnabled="True"

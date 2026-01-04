@@ -7,10 +7,10 @@ interact
 map-title
 map-info
 hud-hp
-wp-ext-elv
+waypoint
 hud-timeleft
 arc-flying
-arc-ground
+arc-walking
 hud-notification
 hud-serial
 inv-tags

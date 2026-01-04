@@ -7,7 +7,7 @@ namespace GamingVision.Rendering;
 
 /// <summary>
 /// Renders crosshair shapes on a WPF Canvas.
-/// Supports Cross, Circle, and Box shapes with configurable colors and thickness.
+/// Supports Circle and Box shapes with configurable colors and thickness.
 /// </summary>
 public class CrosshairRenderer
 {
@@ -63,9 +63,6 @@ public class CrosshairRenderer
 
         switch (_settings.Shape.ToLowerInvariant())
         {
-            case "cross":
-                DrawCross(centerX, centerY, size, thickness, outlineThickness, fillBrush, outlineBrush);
-                break;
             case "circle":
                 DrawCircle(centerX, centerY, size, thickness, outlineThickness, fillBrush, outlineBrush);
                 break;
@@ -81,61 +78,6 @@ public class CrosshairRenderer
     public void Clear()
     {
         _canvas.Children.Clear();
-    }
-
-    private void DrawCross(double centerX, double centerY, double size, double thickness,
-        double outlineThickness, Brush fillBrush, Brush outlineBrush)
-    {
-        double halfSize = size / 2;
-        double totalThickness = thickness + (outlineThickness * 2);
-
-        // Draw outline (if outline thickness > 0)
-        if (outlineThickness > 0)
-        {
-            // Horizontal outline
-            var hOutline = new Rectangle
-            {
-                Width = size,
-                Height = totalThickness,
-                Fill = outlineBrush
-            };
-            Canvas.SetLeft(hOutline, centerX - halfSize);
-            Canvas.SetTop(hOutline, centerY - (totalThickness / 2));
-            _canvas.Children.Add(hOutline);
-
-            // Vertical outline
-            var vOutline = new Rectangle
-            {
-                Width = totalThickness,
-                Height = size,
-                Fill = outlineBrush
-            };
-            Canvas.SetLeft(vOutline, centerX - (totalThickness / 2));
-            Canvas.SetTop(vOutline, centerY - halfSize);
-            _canvas.Children.Add(vOutline);
-        }
-
-        // Horizontal line (main color)
-        var hLine = new Rectangle
-        {
-            Width = size,
-            Height = thickness,
-            Fill = fillBrush
-        };
-        Canvas.SetLeft(hLine, centerX - halfSize);
-        Canvas.SetTop(hLine, centerY - (thickness / 2));
-        _canvas.Children.Add(hLine);
-
-        // Vertical line (main color)
-        var vLine = new Rectangle
-        {
-            Width = thickness,
-            Height = size,
-            Fill = fillBrush
-        };
-        Canvas.SetLeft(vLine, centerX - (thickness / 2));
-        Canvas.SetTop(vLine, centerY - halfSize);
-        _canvas.Children.Add(vLine);
     }
 
     private void DrawCircle(double centerX, double centerY, double size, double thickness,

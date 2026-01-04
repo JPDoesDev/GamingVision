@@ -2,14 +2,14 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20260103_183238_640.onnx",
+  "modelFile": "ArcRaidersModel_v20260103_210918_640.onnx",
   "windowTitle": "\uFEFF\u200BA\u200BR\uFEFF\u200B\u200B\u200B\uFEFFC\u200B\u200B\u2005\u200B\u200B\u200B\u200BRa\u200Bi\u200B\u200B\u200B\uFEFFder\uFEFFs",
   "primaryLabels": [
     "interact",
     "inv-title",
     "quick_menu",
     "st-title",
-    "wp-ext-elv",
+    "waypoint",
     "hud-notification"
   ],
   "secondaryLabels": [
@@ -49,7 +49,7 @@
       "description": "Object to interact with"
     },
     {
-      "name": "wp-ext-elv",
+      "name": "waypoint",
       "description": "Watpoint: Extraction Elevator"
     },
     {
@@ -61,7 +61,7 @@
       "description": "ARC enemy: Flying type (Wasp, Rocket)"
     },
     {
-      "name": "arc-ground",
+      "name": "arc-walking",
       "description": "ARC enemy: Ground type (Pop, Tick, Spider)"
     },
     {
@@ -102,7 +102,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "window",
+    "method": "fullscreen",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -142,7 +142,7 @@
       {
         "name": "Waypoint",
         "labels": [
-          "wp-ext-elv"
+          "waypoint"
         ],
         "color": "#FFFFFF",
         "thickness": 10,
@@ -154,7 +154,7 @@
         "name": "Arc",
         "labels": [
           "arc-flying",
-          "arc-ground"
+          "arc-walking"
         ],
         "color": "#FF0000",
         "thickness": 10,
@@ -172,7 +172,7 @@
   },
   "waypoint": {
     "enabled": true,
-    "label": "wp-ext-elv",
+    "label": "waypoint",
     "mode": "sonar",
     "readIntervalSeconds": 2
   },

@@ -17,7 +17,7 @@ public class CrosshairSettings
     public int OffsetY { get; set; } = 0;
 
     /// <summary>
-    /// Shape of the crosshair: "Cross", "Circle", or "Box".
+    /// Shape of the crosshair: "Circle" or "Box".
     /// </summary>
     public string Shape { get; set; } = "Circle";
 
@@ -32,9 +32,9 @@ public class CrosshairSettings
     public string OutlineColor { get; set; } = "#000000";
 
     /// <summary>
-    /// Size/radius of the crosshair in pixels (1-100).
+    /// Size/radius of the crosshair in pixels (50-100).
     /// </summary>
-    public int Size { get; set; } = 20;
+    public int Size { get; set; } = 50;
 
     /// <summary>
     /// Thickness of the crosshair lines in pixels (1-25).
