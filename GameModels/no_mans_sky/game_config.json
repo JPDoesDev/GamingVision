@@ -106,5 +106,11 @@
     "confidenceThreshold": 0.5,
     "toggleHotkey": "Alt\u002BO",
     "groups": []
+  },
+  "training": {
+    "enabled": true,
+    "dataPath": "C:\\GamingVision_Training_Data\\No_Mans_Sky",
+    "captureHotkey": "F1",
+    "annotationConfidenceThreshold": 0.1
   }
 }

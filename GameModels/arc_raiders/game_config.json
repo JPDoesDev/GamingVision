@@ -166,7 +166,7 @@
   },
   "training": {
     "enabled": true,
-    "dataPath": "D:\\Dev\\Training_Data\\New_Arc_Raiders",
+    "dataPath": "C:\\GamingVision_Training_Data\\Arc_Raiders",
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.2
   },
