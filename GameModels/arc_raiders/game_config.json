@@ -2,8 +2,8 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20251231_000834_640.onnx",
-  "windowTitle": "A\u200B\u200B\uFEFF\u200BRC \uFEFFR\uFEFF\u200B\uFEFF\u200B\uFEFF\u200B\u200Ba\u200B\u200B\u200Bid\u200B\u200B\u200B\uFEFFe\u200Brs",
+  "modelFile": "ArcRaidersModel_v20260103_183238_640.onnx",
+  "windowTitle": "A\u200b\u200b\ufeff\u200bRC \ufeffR\ufeff\u200b\ufeff\u200b\ufeff\u200b\u200ba\u200b\u200b\u200bid\u200b\u200b\u200b\ufeffe\u200brs",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -94,12 +94,12 @@
     }
   ],
   "hotkeys": {
-    "readPrimary": "Alt\u002B1",
-    "readSecondary": "Alt\u002B2",
-    "readTertiary": "Alt\u002B3",
-    "stopReading": "Alt\u002B4",
-    "toggleDetection": "Alt\u002B5",
-    "quit": "Alt\u002BQ"
+    "readPrimary": "Alt+1",
+    "readSecondary": "Alt+2",
+    "readTertiary": "Alt+3",
+    "stopReading": "Alt+4",
+    "toggleDetection": "Alt+5",
+    "quit": "Alt+Q"
   },
   "capture": {
     "method": "fullscreen",
@@ -137,7 +137,7 @@
   "overlay": {
     "enabled": true,
     "confidenceThreshold": 0.35,
-    "toggleHotkey": "Alt\u002BO",
+    "toggleHotkey": "Alt+O",
     "groups": [
       {
         "name": "Waypoint",
@@ -183,7 +183,7 @@
     "color": "#FFFFFF",
     "outlineColor": "#000000",
     "size": 50,
-    "thickness": 2,
+    "thickness": 7,
     "outlineThickness": 5
   }
 }
