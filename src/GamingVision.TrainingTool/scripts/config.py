@@ -71,7 +71,7 @@ TRAINING_CONFIG = {
     # - 200-300: Standard training, good results
     # - 300-600: Maximum accuracy, large datasets
     # Watch validation metrics - stop early if val_loss stops improving
-    "epochs": 150,
+    "epochs": 250,
 
     # IMGSZ: Training image resolution (square)
     # Range: 320-1920

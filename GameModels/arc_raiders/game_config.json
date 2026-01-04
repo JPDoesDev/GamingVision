@@ -3,7 +3,7 @@
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
   "modelFile": "ArcRaidersModel_v20260103_183238_640.onnx",
-  "windowTitle": "A\u200b\u200b\ufeff\u200bRC \ufeffR\ufeff\u200b\ufeff\u200b\ufeff\u200b\u200ba\u200b\u200b\u200bid\u200b\u200b\u200b\ufeffe\u200brs",
+  "windowTitle": "\uFEFF\u200BA\u200BR\uFEFF\u200B\u200B\u200B\uFEFFC\u200B\u200B\u2005\u200B\u200B\u200B\u200BRa\u200Bi\u200B\u200B\u200B\uFEFFder\uFEFFs",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -94,15 +94,15 @@
     }
   ],
   "hotkeys": {
-    "readPrimary": "Alt+1",
-    "readSecondary": "Alt+2",
-    "readTertiary": "Alt+3",
-    "stopReading": "Alt+4",
-    "toggleDetection": "Alt+5",
-    "quit": "Alt+Q"
+    "readPrimary": "Alt\u002B1",
+    "readSecondary": "Alt\u002B2",
+    "readTertiary": "Alt\u002B3",
+    "stopReading": "Alt\u002B4",
+    "toggleDetection": "Alt\u002B5",
+    "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "fullscreen",
+    "method": "window",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -124,7 +124,7 @@
   "detection": {
     "autoReadCooldown": 2500,
     "confidenceThreshold": 0.2,
-    "autoReadConfidenceThreshold": 0.2,
+    "autoReadConfidenceThreshold": 0.4,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
@@ -137,7 +137,7 @@
   "overlay": {
     "enabled": true,
     "confidenceThreshold": 0.35,
-    "toggleHotkey": "Alt+O",
+    "toggleHotkey": "Alt\u002BO",
     "groups": [
       {
         "name": "Waypoint",
@@ -168,7 +168,7 @@
     "enabled": true,
     "dataPath": "D:\\Dev\\Training_Data\\New_Arc_Raiders",
     "captureHotkey": "F1",
-    "annotationConfidenceThreshold": 0.1
+    "annotationConfidenceThreshold": 0.2
   },
   "waypoint": {
     "enabled": true,
