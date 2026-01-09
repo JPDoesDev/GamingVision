@@ -91,6 +91,10 @@
     {
       "name": "control",
       "description": "Controls on menus that are labeled"
+    },
+    {
+      "name": "arc-rolling",
+      "description": "ARC enemy: Rolling type (pop, fireball)"
     }
   ],
   "hotkeys": {
