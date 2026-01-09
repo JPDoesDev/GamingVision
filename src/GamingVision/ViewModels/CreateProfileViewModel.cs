@@ -245,20 +245,22 @@ public partial class CreateProfileViewModel : ObservableObject
                 Overlay = new OverlaySettings(),
                 Training = new TrainingSettings
                 {
-                    Enabled = true,
+                    Enabled = false, // Default to disabled, user enables when ready
                     DataPath = string.Empty // Will use default path
                 }
             };
 
-            // Create the GameModels directory
-            var gameModelsDir = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "GameModels",
-                GameId);
-            Directory.CreateDirectory(gameModelsDir);
-
-            // Save the profile
+            // Save the profile (this creates the GameModels/{gameId} directory and game_config.json)
             await _configManager.SaveGameProfileAsync(profile);
+
+            // Verify the config file was created
+            var configPath = Path.Combine(_configManager.GameModelsDirectory, GameId, "game_config.json");
+            if (!File.Exists(configPath))
+            {
+                throw new Exception($"Config file was not created at: {configPath}");
+            }
+
+            Logger.Log($"Config file created at: {configPath}");
 
             // Create the training data directories
             var trainingDataRoot = TrainingDataManager.GetDefaultTrainingDataRoot();

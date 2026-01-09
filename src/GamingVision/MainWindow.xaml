@@ -398,12 +398,11 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Capture Hotkey:" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1"
-                                     Text="{Binding TrainingCaptureHotkey, Mode=OneWay}"
-                                     IsReadOnly="True"
+                                     Text="{Binding TrainingCaptureHotkey, UpdateSourceTrigger=PropertyChanged}"
                                      MaxWidth="100"
                                      HorizontalAlignment="Left"
                                      AutomationProperties.Name="Capture Screenshot Hotkey"
-                                     AutomationProperties.HelpText="Press this key to capture a screenshot when training mode is enabled"/>
+                                     AutomationProperties.HelpText="Hotkey to capture a screenshot (e.g., F1, F2, Ctrl+S)"/>
                         </Grid>
                     </GroupBox>
 
@@ -485,30 +484,22 @@
                                     <Style TargetType="Ellipse">
                                         <Setter Property="Fill" Value="#666666"/>
                                         <Style.Triggers>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
-                                                    <Condition Binding="{Binding IsTrainingEnabled}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
+                                            <DataTrigger Binding="{Binding IsTrainingEnabled}" Value="True">
                                                 <Setter Property="Fill" Value="#00FF00"/>
-                                            </MultiDataTrigger>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Ellipse.Style>
                             </Ellipse>
                             <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
-                                       Text="{Binding TrainingStatus, FallbackValue='Training Inactive - Start Engine', TargetNullValue='Training Inactive - Start Engine'}">
+                                       Text="{Binding TrainingStatus, FallbackValue='Training Disabled', TargetNullValue='Training Disabled'}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
                                         <Style.Triggers>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
-                                                    <Condition Binding="{Binding IsTrainingEnabled}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
+                                            <DataTrigger Binding="{Binding IsTrainingEnabled}" Value="True">
                                                 <Setter Property="Foreground" Value="#00FF00"/>
-                                            </MultiDataTrigger>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
@@ -531,7 +522,8 @@
                                        Margin="0,0,0,5"/>
                             <TextBlock TextWrapping="Wrap"
                                        Foreground="{DynamicResource SecondaryTextBrush}">
-                                <Run Text="When enabled, pressing the capture hotkey saves a screenshot to the training data folder. Use POST PROCESS to run detection on all captured images - this can be done offline after playing. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
+                                <Run FontWeight="SemiBold" Text="Note: Engine is not required to capture screenshots."/>
+                                <Run Text=" When enabled, pressing the capture hotkey saves a screenshot to the training data folder. Use POST PROCESS to run detection on all captured images - this can be done offline after playing. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
                             </TextBlock>
                         </StackPanel>
                     </Border>

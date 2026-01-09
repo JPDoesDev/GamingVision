@@ -29,16 +29,26 @@ pip install -r requirements.txt
 
 ## Workflow
 
-### Step 1: Capture Screenshots
+### Step 1: Create Game Profile & Capture Screenshots
 
 ```powershell
-dotnet run --project src\GamingVision.TrainingTool
+dotnet run -c Release --project src\GamingVision
 ```
 
-1. Select your game (or create new profile)
-2. Start the game
-3. Press **F1** to capture screenshots
-4. Press **Escape** when done
+1. Go to the **Training** tab
+2. Click **CREATE NEW** to create a new game profile
+3. Fill in:
+   - **Display Name**: Human-readable name (e.g., "Arc Raiders")
+   - **Game ID**: Auto-generated folder name (e.g., "arc_raiders")
+   - **Window Title**: Select from open windows or type manually
+   - **Capture Method**: Window (recommended) or Fullscreen
+4. Click **Create**
+5. Enable the **"Enable screenshots for training"** checkbox
+6. (Optional) Change the capture hotkey in **Capture Settings** (default: F1)
+7. Start your game
+8. Press the capture hotkey (default **F1**) to capture screenshots
+
+> **Note:** The detection engine does NOT need to be running to capture screenshots. Just enable the training checkbox and press the capture hotkey.
 
 Aim for 100-500+ images covering different UI states.
 
@@ -121,11 +131,11 @@ Select your game and click **Start Engine**.
 
 | Step | Command |
 |------|---------|
-| Capture | `dotnet run --project src\GamingVision.TrainingTool` |
+| Capture | `dotnet run -c Release --project src\GamingVision` (Training tab) |
 | Label | `py -3.10 -m labelImg.labelImg ...` |
 | Train | `py -3.10 01_train_pipeline.py` |
 | Test | `dotnet run -c Release --project src\GamingVision` |
 
 ---
 
-*Last Updated: 2025-12-24*
+*Last Updated: 2026-01-08*

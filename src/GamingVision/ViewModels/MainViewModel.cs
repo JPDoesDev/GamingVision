@@ -83,7 +83,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _isOverlayEnabled;
 
     [ObservableProperty]
-    private bool _isTrainingEnabled = true;
+    private bool _isTrainingEnabled = false;
 
     [ObservableProperty]
     private string _trainingDataPath = string.Empty;
@@ -2086,37 +2086,75 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Captures a training screenshot (image only, no detection).
     /// Use Post Process to run detection on captured images.
+    /// Works with or without the engine running - uses GDI capture of primary monitor when engine is off.
     /// </summary>
     private Task CaptureTrainingScreenshotAsync()
     {
-        if (!IsEngineRunning)
-        {
-            Logger.Log("Training capture: Engine not running");
-            System.Media.SystemSounds.Beep.Play();
-            return Task.CompletedTask;
-        }
-
+        // Check if training is enabled
         if (!IsTrainingEnabled)
         {
             Logger.Log("Training capture: Training disabled");
+            ShowTrainingError("Training is disabled. Enable the 'Enable screenshots for training' checkbox first.");
             return Task.CompletedTask;
         }
 
-        if (_captureManager == null || _trainingDataManager == null)
+        // Check if a game profile is selected
+        var profile = GetSelectedGameProfile();
+        if (profile == null)
         {
-            Logger.Warn("Training capture: Manager not initialized");
-            System.Media.SystemSounds.Beep.Play();
+            Logger.Warn("Training capture: No game profile selected");
+            ShowTrainingError("No game profile selected. Please select or create a game profile first.");
+            return Task.CompletedTask;
+        }
+
+        // Check if training data manager is initialized
+        if (_trainingDataManager == null)
+        {
+            Logger.Warn("Training capture: Training data manager not initialized");
+            ShowTrainingError("Training data manager not initialized. Try reselecting the game profile.");
             return Task.CompletedTask;
         }
 
         try
         {
-            // Use CaptureFrame which uses PrintWindow to avoid capturing overlays
-            var frame = _captureManager.CaptureFrame();
+            CapturedFrame? frame = null;
+            string captureMethod;
+
+            // If engine is running, use the capture manager (may capture specific window)
+            // Otherwise, capture primary monitor directly using GDI
+            if (IsEngineRunning && _captureManager != null)
+            {
+                frame = _captureManager.CaptureFrame();
+                captureMethod = "engine";
+            }
+            else
+            {
+                // Capture primary monitor directly without engine
+                frame = CaptureFullscreenForTraining();
+                captureMethod = "fullscreen";
+            }
+
             if (frame == null)
             {
-                Logger.Error("Training capture: Failed to capture frame");
-                System.Media.SystemSounds.Beep.Play();
+                Logger.Error($"Training capture: Failed to capture frame (method: {captureMethod})");
+
+                // Provide specific error message based on capture method
+                if (captureMethod == "engine")
+                {
+                    var captureSettings = profile.Capture;
+                    if (captureSettings?.Method == "window")
+                    {
+                        ShowTrainingError($"Failed to capture window.\n\nWindow title: {profile.WindowTitle}\n\nMake sure the game window is open and visible.");
+                    }
+                    else
+                    {
+                        ShowTrainingError("Failed to capture screen. Make sure your display is available.");
+                    }
+                }
+                else
+                {
+                    ShowTrainingError("Failed to capture screen. Make sure your primary display is available.");
+                }
                 return Task.CompletedTask;
             }
 
@@ -2148,10 +2186,83 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Logger.Error("Training capture error", ex);
-            System.Media.SystemSounds.Beep.Play();
+            ShowTrainingError($"Failed to capture screenshot:\n\n{ex.Message}");
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Shows a training error message box on the UI thread.
+    /// </summary>
+    private static void ShowTrainingError(string message)
+    {
+        System.Media.SystemSounds.Beep.Play();
+
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            System.Windows.MessageBox.Show(
+                message,
+                "Training Capture Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+        });
+    }
+
+    /// <summary>
+    /// Captures the primary monitor for training when engine is not running.
+    /// </summary>
+    private static CapturedFrame? CaptureFullscreenForTraining()
+    {
+        try
+        {
+            var monitors = GdiCaptureService.GetMonitors();
+            var primary = monitors.FirstOrDefault(m => m.IsPrimary) ?? monitors.FirstOrDefault();
+            if (primary == null)
+            {
+                Logger.Error("Training capture: No monitor found");
+                return null;
+            }
+
+            var bounds = primary.Bounds;
+            using var bitmap = new System.Drawing.Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var graphics = System.Drawing.Graphics.FromImage(bitmap);
+
+            graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, System.Drawing.CopyPixelOperation.SourceCopy);
+
+            // Convert bitmap to byte array
+            var bitmapData = bitmap.LockBits(
+                new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            try
+            {
+                int stride = bitmapData.Stride;
+                int size = stride * bitmap.Height;
+                var data = new byte[size];
+
+                System.Runtime.InteropServices.Marshal.Copy(bitmapData.Scan0, data, 0, size);
+
+                return new CapturedFrame
+                {
+                    Data = data,
+                    Width = bitmap.Width,
+                    Height = bitmap.Height,
+                    Stride = stride,
+                    Timestamp = DateTime.UtcNow
+                };
+            }
+            finally
+            {
+                bitmap.UnlockBits(bitmapData);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Training fullscreen capture error", ex);
+            return null;
+        }
     }
 
     /// <summary>
@@ -2200,11 +2311,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var profile = GetSelectedGameProfile();
         if (profile == null) return;
 
-        IsTrainingEnabled = profile.Training?.Enabled ?? true;
+        IsTrainingEnabled = profile.Training?.Enabled ?? false;
         TrainingCaptureHotkey = profile.Training?.CaptureHotkey ?? "F1";
         TrainingDataPath = GetTrainingDataRoot(profile);
         AnnotationConfidenceThreshold = profile.Training?.AnnotationConfidenceThreshold ?? 0.1f;
         _trainingCaptureCount = 0;
+
+        // Initialize training data manager so capture works without engine
+        InitializeTrainingDataManager(profile);
+
         UpdateTrainingStatus();
     }
 
@@ -2218,6 +2333,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
     }
 
+    partial void OnTrainingCaptureHotkeyChanged(string value)
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
+
+        // Update and save profile
+        profile.Training ??= new TrainingSettings();
+        profile.Training.CaptureHotkey = value;
+        Task.Run(async () => await _configManager.SaveGameProfileAsync(profile));
+
+        // Re-register the hotkey with the new value
+        if (_hotkeyService != null)
+        {
+            _hotkeyService.UnregisterHotkey(HotkeyId.CaptureTraining);
+            _hotkeyService.RegisterHotkey(HotkeyId.CaptureTraining, value);
+        }
+
+        // Update status message to show new hotkey
+        UpdateTrainingStatus();
+    }
+
     /// <summary>
     /// Updates the training status message based on current state.
     /// </summary>
@@ -2227,12 +2363,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             TrainingStatus = "Training Disabled";
         }
-        else if (!IsEngineRunning)
-        {
-            TrainingStatus = "Training Inactive - Start Engine";
-        }
         else
         {
+            // Training works with or without engine - show ready status
             TrainingStatus = $"Ready - Press {TrainingCaptureHotkey} to capture";
         }
     }

@@ -82,10 +82,8 @@ GamingVision/
 │   │   ├── Utilities/                   # ConfigManager, Logger, GPU detection
 │   │   └── Native/                      # Win32 P/Invoke declarations
 │   │
-│   └── GamingVision.TrainingTool/       # Training data collection console app
-│       ├── Program.cs                   # TUI menu and capture logic
-│       ├── TrainingDataManager.cs       # YOLO annotation file management
-│       └── ConsoleHotkeyService.cs      # F1 hotkey handling
+│   └── GamingVision.TrainingTool/       # Training scripts and tools
+│       └── scripts/                     # Python training pipeline scripts
 │
 ├── GameModels/                          # Per-game model folders
 │   └── no_mans_sky/
@@ -93,7 +91,7 @@ GamingVision/
 │       ├── NoMansModel.txt              # Label definitions
 │       └── game_config.json             # Game-specific configuration
 │
-├── training_data/                       # Training data output (created by TrainingTool)
+├── training_data/                       # Training data output (created by main app)
 │   └── {game_id}/
 │       ├── images/                      # Screenshots (PNG)
 │       ├── labels/                      # YOLO annotations (TXT)
@@ -177,33 +175,29 @@ Each game has its own configuration file:
 - **autoReadEnabled**: Whether primary objects are automatically read when detected
 - **readPrimaryLabelAloud**: Include the label name when speaking (e.g., "item, Health Pack")
 
-## Training Data Collection Tool
+## Training Data Collection
 
-GamingVision includes a console-based training data collection tool for creating and improving YOLO models.
+GamingVision has built-in training data collection for creating custom YOLO models.
 
-### Running the Training Tool
+### Capturing Screenshots
 
-```powershell
-dotnet run --project src\GamingVision.TrainingTool
-```
+1. Go to the **Training** tab
+2. Click **CREATE NEW** to create a new game profile
+3. Fill in the display name, select the game window, and click **Create**
+4. Enable **"Enable screenshots for training"** checkbox
+5. (Optional) Change the capture hotkey in **Capture Settings** (default: F1)
+6. Launch your game
+7. Press the capture hotkey to save screenshots
 
-### Features
-
-- **TUI Menu**: Select existing game profile or create a new one
-- **F1 Hotkey**: Captures fullscreen screenshot while gaming
-- **Auto-Detection**: If a model exists, runs YOLO and pre-labels the screenshot
-- **LabelImg Compatible**: Outputs YOLO format annotations
+> **Note:** The detection engine does NOT need to be running to capture screenshots. Just enable the training checkbox and press the capture hotkey.
 
 ### Workflow
 
-1. Run the training tool and select a game (or create new profile)
-2. Launch your game
-3. Press **F1** whenever there's an interesting UI element on screen
-4. Screenshots are saved to `training_data/{game}/images/`
-5. If model exists, annotations are saved to `training_data/{game}/labels/`
-6. Press **Escape** to return to menu
-7. Use [LabelImg](https://github.com/HumanSignal/labelImg) to review/adjust annotations
-8. Train your model with the collected data
+1. Create a game profile and capture screenshots
+2. Screenshots are saved to `training_data/{game}/images/`
+3. Use [LabelImg](https://github.com/HumanSignal/labelImg) to label UI elements
+4. Train your model with the collected data
+5. Use **POST PROCESS** in the Training tab to re-run detection on all images after training
 
 ### Output Format
 
@@ -218,7 +212,7 @@ Annotation format (YOLO): `class_id center_x center_y width height` (normalized 
 
 ## Creating Custom Models
 
-1. Use the Training Tool to collect screenshots from your target game
+1. Collect screenshots using the **Training** tab (see above)
 2. Label UI elements using [LabelImg](https://github.com/HumanSignal/labelImg) (annotations in `training_data/{game}/labels/`)
 3. Train a YOLOv11 model:
    ```python
