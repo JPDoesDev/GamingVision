@@ -64,14 +64,13 @@ Aim for 100-500+ images covering different UI states.
    health-bar
    ```
 
-2. Launch LabelImg:
-   ```powershell
-   py -3.10 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\{game_id}\labels"
-   ```
+2. Launch mlabelImg (recommended via GUI):
+   - In the main app, click **TRAIN** button
+   - Click **LAUNCH mlabelImg** button
 
-   **Example for arc_raiders:**
+   Or manually from command line:
    ```powershell
-   py -3.10 -m labelImg.labelImg "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\images" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\classes.txt" "D:\Dev\GamingVision\src\GamingVision.TrainingTool\training_data\arc_raiders\labels"
+   mlabelImg "training_data\{game_id}\images" "training_data\{game_id}\classes.txt" "training_data\{game_id}\labels"
    ```
 
 3. Label all UI elements:
@@ -81,7 +80,34 @@ Aim for 100-500+ images covering different UI states.
 
 ---
 
-### Step 3: Configure & Train
+### Step 3: Train via GUI (Recommended)
+
+1. In the main app, click the **TRAIN** button (next to POST PROCESS)
+2. The Training Window opens:
+   - **Training Data Paths**: Shows New and Base training data locations
+   - **Training Mode**: Select Fine-tune or Full Retrain
+   - **Launch mlabelImg**: Opens annotation tool directly
+3. Click **START TRAINING**
+4. If prerequisites are missing, a dialog shows what needs to be installed:
+   - Python 3.10 - Download link to python.org
+   - CUDA 13.0 - Download link to nvidia.com
+   - PyTorch - Install button opens terminal
+   - Packages - Install button opens terminal
+5. The **Training Parameters** dialog appears:
+   - **Epochs**: Number of training passes (default: 150)
+   - **Image Size**: Training resolution (640/1280/1440)
+   - **Batch**: GPU memory usage (0.5-0.9)
+   - **Patience**: Early stopping patience
+   - **Learning Rate**: Initial learning rate
+   - **Device**: cuda or cpu
+   - **Workers**: Data loader threads
+   - **Cache/Mixed Precision**: Performance options
+6. Click **Start Training** - a terminal window opens showing training progress
+7. The terminal stays open when training completes so you can see the results
+
+Parameters are saved per-game in `game_config.json` for next time.
+
+### Step 3 (Alternative): Train via Command Line
 
 1. Edit `scripts/config.py`:
    ```python
@@ -92,7 +118,12 @@ Aim for 100-500+ images covering different UI states.
 2. Run the training pipeline:
    ```powershell
    cd src\GamingVision.TrainingTool\scripts
-   py -3.10 01_train_pipeline.py
+   python 01_train_pipeline.py
+   ```
+
+   Or with custom parameters:
+   ```powershell
+   python 01_train_pipeline.py --epochs 200 --imgsz 1440 --batch 0.70
    ```
 
 The pipeline will:
@@ -131,11 +162,24 @@ Select your game and click **Start Engine**.
 
 | Step | Command |
 |------|---------|
-| Capture | `dotnet run -c Release --project src\GamingVision` (Training tab) |
-| Label | `py -3.10 -m labelImg.labelImg ...` |
-| Train | `py -3.10 01_train_pipeline.py` |
-| Test | `dotnet run -c Release --project src\GamingVision` |
+| Capture | Main app > Training tab > Enable checkbox > Press F1 |
+| Label | Main app > TRAIN button > Launch mlabelImg |
+| Train (GUI) | Main app > TRAIN button > START TRAINING |
+| Train (CLI) | `python 01_train_pipeline.py` |
+| Test | Main app > Start Engine |
+
+## Training Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Epochs | 150 | Training passes (50-600) |
+| Image Size | 1440 | Resolution (640/1280/1440) |
+| Batch | 0.70 | GPU memory fraction (0.5-0.9) |
+| Patience | 50 | Early stop epochs (10-100) |
+| Learning Rate | 0.01 | Initial LR (0.001-0.1) |
+| Device | cuda | Training device (cuda/cpu) |
+| Workers | 8 | Data loader threads (0-16) |
 
 ---
 
-*Last Updated: 2026-01-08*
+*Last Updated: 2026-01-10*

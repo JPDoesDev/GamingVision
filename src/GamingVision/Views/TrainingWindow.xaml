@@ -1,0 +1,191 @@
+<Window x:Class="GamingVision.Views.TrainingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:GamingVision.Views"
+        mc:Ignorable="d"
+        Title="Training Workflow"
+        Height="867"
+        Width="650"
+        MinHeight="799"
+        MinWidth="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Training Workflow Window">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Training Data Paths -->
+        <GroupBox Grid.Row="0" Header="Training Data Paths">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0"
+                           Text="New Training Data:"
+                           VerticalAlignment="Center"
+                           Margin="0,5"/>
+                <TextBox Grid.Row="0" Grid.Column="1"
+                         Text="{Binding NewTrainingDataPath, Mode=OneWay}"
+                         IsReadOnly="True"
+                         Margin="0,5"
+                         AutomationProperties.Name="New Training Data Path"/>
+                <Button Grid.Row="0" Grid.Column="2"
+                        Content="Browse..."
+                        Command="{Binding BrowseNewPathCommand}"
+                        Margin="5,5,0,5"
+                        MinWidth="70"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0"
+                           Text="Base Training Data:"
+                           VerticalAlignment="Center"
+                           Margin="0,5"/>
+                <TextBox Grid.Row="1" Grid.Column="1"
+                         Text="{Binding BaseTrainingDataPath, Mode=OneWay}"
+                         IsReadOnly="True"
+                         Margin="0,5"
+                         AutomationProperties.Name="Base Training Data Path"/>
+                <Button Grid.Row="1" Grid.Column="2"
+                        Content="Browse..."
+                        Command="{Binding BrowseBasePathCommand}"
+                        Margin="5,5,0,5"
+                        MinWidth="70"/>
+
+                <Border Grid.Row="2" Grid.ColumnSpan="3"
+                        Background="{DynamicResource SurfaceBrush}"
+                        CornerRadius="4"
+                        Padding="10,5"
+                        Margin="0,5,0,0">
+                    <TextBlock>
+                        <Run Text="New: "/>
+                        <Run Text="{Binding NewImageCount, Mode=OneWay}" FontWeight="Bold"/>
+                        <Run Text=" images ("/>
+                        <Run Text="{Binding NewLabeledCount, Mode=OneWay}"/>
+                        <Run Text=" labeled)"/>
+                        <Run Text="  |  "/>
+                        <Run Text="Base: "/>
+                        <Run Text="{Binding BaseImageCount, Mode=OneWay}" FontWeight="Bold"/>
+                        <Run Text=" images ("/>
+                        <Run Text="{Binding BaseLabeledCount, Mode=OneWay}"/>
+                        <Run Text=" labeled)"/>
+                    </TextBlock>
+                </Border>
+            </Grid>
+        </GroupBox>
+
+        <!-- Training Mode -->
+        <GroupBox Grid.Row="1" Header="Training Mode" Margin="0,10,0,0">
+            <StackPanel>
+                <RadioButton Content="Fine-tune (train on new data only, uses existing model)"
+                             IsChecked="{Binding IsFineTuneMode}"
+                             Margin="0,5"
+                             IsEnabled="{Binding CanSelectMode}"
+                             AutomationProperties.Name="Fine-tune Mode"/>
+                <RadioButton Content="Full Retrain (train from scratch on all data)"
+                             IsChecked="{Binding IsFullRetrainMode}"
+                             Margin="0,5"
+                             IsEnabled="{Binding CanSelectMode}"
+                             AutomationProperties.Name="Full Retrain Mode"/>
+
+                <Border Background="{DynamicResource SurfaceBrush}"
+                        CornerRadius="4"
+                        Padding="10"
+                        Margin="0,10,0,0">
+                    <TextBlock Text="{Binding ModeDescription}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+                </Border>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Annotation Tools -->
+        <GroupBox Grid.Row="2" Header="Annotation Tools" Margin="0,10,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Row="0" Grid.Column="0"
+                        Content="LAUNCH mlabelImg"
+                        Command="{Binding LaunchMLabelImgCommand}"
+                        MinWidth="140"
+                        FontWeight="Bold"
+                        IsEnabled="{Binding CanLaunchMLabelImg}"
+                        AutomationProperties.Name="Launch mlabelImg annotation tool"/>
+
+                <TextBlock Grid.Row="0" Grid.Column="1"
+                           Text="{Binding PythonStatus}"
+                           VerticalAlignment="Center"
+                           Margin="15,0,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource SecondaryTextBrush}"/>
+
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2"
+                            Orientation="Horizontal"
+                            Margin="0,10,0,0">
+                    <Button Content="Merge New → Base"
+                            Command="{Binding MergeToBaseCommand}"
+                            MinWidth="120"
+                            IsEnabled="{Binding CanMerge}"
+                            AutomationProperties.Name="Merge new training data to base"/>
+                    <Button Content="Clear New"
+                            Command="{Binding ClearNewCommand}"
+                            Margin="10,0,0,0"
+                            MinWidth="80"
+                            IsEnabled="{Binding CanClearNew}"
+                            AutomationProperties.Name="Clear new training data folder"/>
+                    <Button Content="Refresh Counts"
+                            Command="{Binding RefreshCountsCommand}"
+                            Margin="10,0,0,0"
+                            MinWidth="100"
+                            AutomationProperties.Name="Refresh image counts"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Buttons -->
+        <Grid Grid.Row="4" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Content="START TRAINING"
+                    Command="{Binding StartTrainingCommand}"
+                    FontWeight="Bold"
+                    MinWidth="130"
+                    HorizontalAlignment="Left"
+                    IsEnabled="{Binding CanStartTraining}"
+                    AutomationProperties.Name="Start Training"/>
+
+            <Button Grid.Column="1"
+                    Content="Close"
+                    Click="CloseButton_Click"
+                    MinWidth="80"
+                    AutomationProperties.Name="Close Window"/>
+        </Grid>
+    </Grid>
+</Window>

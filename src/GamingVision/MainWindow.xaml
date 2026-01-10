@@ -8,9 +8,9 @@
         mc:Ignorable="d"
         Title="GamingVision - Accessibility Tool for Gamers"
         Icon="Resources/app.ico"
-        Height="900"
+        Height="1139"
         Width="650"
-        MinHeight="840"
+        MinHeight="1063"
         MinWidth="600"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip"
@@ -448,6 +448,26 @@
                                         MinWidth="120"
                                         AutomationProperties.Name="Post Process Training Images"
                                         AutomationProperties.HelpText="Run YOLO detection on all training images and regenerate annotations">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsPostProcessing}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="TRAIN"
+                                        Command="{Binding OpenTrainingWindowCommand}"
+                                        FontWeight="Bold"
+                                        MinWidth="80"
+                                        Margin="10,0,0,0"
+                                        AutomationProperties.Name="Open Training Window"
+                                        AutomationProperties.HelpText="Open the training workflow window to train or fine-tune models">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                                             <Style.Triggers>

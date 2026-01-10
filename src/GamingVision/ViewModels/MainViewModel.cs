@@ -2057,6 +2057,45 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    private async Task OpenTrainingWindowAsync()
+    {
+        var profile = GetSelectedGameProfile();
+        if (profile == null)
+        {
+            System.Windows.MessageBox.Show(
+                "Please select a game profile first.",
+                "No Game Selected",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        // Stop engine before opening training window
+        var wasRunning = IsEngineRunning;
+        if (wasRunning)
+        {
+            StopEngine();
+        }
+
+        var trainingWindow = new TrainingWindow(_configManager, profile);
+        trainingWindow.Owner = System.Windows.Application.Current.MainWindow;
+        trainingWindow.ShowDialog();
+
+        // Reload profile (labels may have changed during training)
+        await _configManager.LoadAllGameProfilesAsync();
+        LoadGames();
+
+        // Re-select the same game
+        SelectedGame = Games.FirstOrDefault(g => g.Key == profile.GameId);
+
+        // Restart engine if it was running
+        if (wasRunning && SelectedGame != null)
+        {
+            await StartEngineAsync();
+        }
+    }
+
+    [RelayCommand]
     private void BrowseTrainingFolder()
     {
         var profile = GetSelectedGameProfile();

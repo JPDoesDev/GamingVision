@@ -1,27 +1,173 @@
 """
 Shared configuration for GamingVision training scripts.
-Update GAME_ID before running any scripts.
+
+Configuration can be overridden via command-line arguments or by calling
+apply_config_overrides() before using the config values.
+
+Usage from command line:
+    py -3.10 train_model.py --game-id arc_raiders --training-data-path "C:\\path"
+
+Usage from code:
+    from config import apply_config_overrides, get_config
+    apply_config_overrides(game_id="arc_raiders", training_data_path="C:\\path")
+    cfg = get_config()
 """
 
 import os
 from pathlib import Path
+from dataclasses import dataclass, field
+from typing import Optional
 
 # =============================================================================
-# CONFIGURATION - UPDATE THESE VALUES
+# DEFAULT CONFIGURATION VALUES
 # =============================================================================
 
 # The game you're training a model for (e.g., "arc_raiders", "no_mans_sky")
-GAME_ID = "arc_raiders"
+_DEFAULT_GAME_ID = "arc_raiders"
 
 # Model name for the output files (e.g., "ArcRaidersModel", "NoMansModel")
-MODEL_NAME = "ArcRaidersModel"
+_DEFAULT_MODEL_NAME = "ArcRaidersModel"
 
 # Base YOLO model to use for training
 # Options: "yolo11n.pt" (nano/fast), "yolo11s.pt" (small), "yolo11m.pt" (medium)
-BASE_MODEL = "yolo11n.pt"
+_DEFAULT_BASE_MODEL = "yolo11n.pt"
 
 # =============================================================================
-# PATHS - Auto-calculated, typically don't need to change
+# RUNTIME CONFIGURATION (can be overridden)
+# =============================================================================
+
+@dataclass
+class RuntimeConfig:
+    """Runtime configuration that can be overridden via CLI or code."""
+    game_id: str = _DEFAULT_GAME_ID
+    model_name: str = _DEFAULT_MODEL_NAME
+    base_model: str = _DEFAULT_BASE_MODEL
+    training_data_path: Optional[str] = None  # Override TRAINING_DATA_DIR
+    game_models_path: Optional[str] = None    # Override GAME_MODELS_DIR
+    stats_output_path: Optional[str] = None   # Where to save training stats
+    fine_tune_model_path: Optional[str] = None  # Path to best.pt for fine-tuning
+
+
+# Global runtime config instance
+_runtime_config = RuntimeConfig()
+
+
+def apply_config_overrides(
+    game_id: Optional[str] = None,
+    model_name: Optional[str] = None,
+    base_model: Optional[str] = None,
+    training_data_path: Optional[str] = None,
+    game_models_path: Optional[str] = None,
+    stats_output_path: Optional[str] = None,
+    fine_tune_model_path: Optional[str] = None,
+):
+    """Apply configuration overrides at runtime.
+
+    Call this before using any config values to override defaults.
+    """
+    global _runtime_config, GAME_ID, MODEL_NAME, BASE_MODEL
+    global TRAINING_DATA_DIR, IMAGES_DIR, LABELS_DIR, CLASSES_FILE, DATASET_YAML
+    global TRAIN_IMAGES_DIR, TRAIN_LABELS_DIR, VAL_IMAGES_DIR, VAL_LABELS_DIR
+    global GAME_MODELS_DIR
+
+    if game_id is not None:
+        _runtime_config.game_id = game_id
+    if model_name is not None:
+        _runtime_config.model_name = model_name
+    if base_model is not None:
+        _runtime_config.base_model = base_model
+    if training_data_path is not None:
+        _runtime_config.training_data_path = training_data_path
+    if game_models_path is not None:
+        _runtime_config.game_models_path = game_models_path
+    if stats_output_path is not None:
+        _runtime_config.stats_output_path = stats_output_path
+    if fine_tune_model_path is not None:
+        _runtime_config.fine_tune_model_path = fine_tune_model_path
+
+    # Update module-level variables
+    _recalculate_paths()
+
+
+def get_runtime_config() -> RuntimeConfig:
+    """Get the current runtime configuration."""
+    return _runtime_config
+
+
+def add_config_arguments(parser):
+    """Add standard config arguments to an argparse parser.
+
+    Usage:
+        parser = argparse.ArgumentParser()
+        add_config_arguments(parser)
+        args = parser.parse_args()
+        apply_args_to_config(args)
+    """
+    group = parser.add_argument_group("Configuration Overrides")
+    group.add_argument("--game-id", type=str, help="Game identifier (e.g., arc_raiders)")
+    group.add_argument("--model-name", type=str, help="Model name for output files")
+    group.add_argument("--base-model", type=str, help="Base YOLO model (e.g., yolo11n.pt)")
+    group.add_argument("--training-data-path", type=str, help="Path to training data directory")
+    group.add_argument("--game-models-path", type=str, help="Path to GameModels output directory")
+    group.add_argument("--stats-output-path", type=str, help="Path to save training statistics")
+    group.add_argument("--fine-tune-model-path", type=str, help="Path to best.pt for fine-tuning")
+
+    # Training parameters (override TRAINING_CONFIG values)
+    train_group = parser.add_argument_group("Training Parameters")
+    train_group.add_argument("--epochs", type=int, help="Number of training epochs (default: 150)")
+    train_group.add_argument("--imgsz", type=int, help="Training image size (default: 1440)")
+    train_group.add_argument("--batch", type=float, help="Batch size or GPU memory fraction (default: 0.70)")
+    train_group.add_argument("--patience", type=int, help="Early stopping patience (default: 50)")
+    train_group.add_argument("--lr0", type=float, help="Initial learning rate (default: 0.01)")
+    train_group.add_argument("--device", type=str, help="Training device: cuda or cpu (default: cuda)")
+    train_group.add_argument("--workers", type=int, help="Data loader workers (default: 8)")
+    train_group.add_argument("--cache", action="store_true", dest="cache", help="Enable image caching")
+    train_group.add_argument("--no-cache", action="store_false", dest="cache", help="Disable image caching")
+    train_group.add_argument("--amp", action="store_true", dest="amp", help="Enable mixed precision (FP16)")
+    train_group.add_argument("--no-amp", action="store_false", dest="amp", help="Disable mixed precision")
+    parser.set_defaults(cache=None, amp=None)  # None means use TRAINING_CONFIG default
+
+
+def apply_args_to_config(args):
+    """Apply parsed arguments to configuration.
+
+    Usage:
+        args = parser.parse_args()
+        apply_args_to_config(args)
+    """
+    apply_config_overrides(
+        game_id=getattr(args, 'game_id', None),
+        model_name=getattr(args, 'model_name', None),
+        base_model=getattr(args, 'base_model', None),
+        training_data_path=getattr(args, 'training_data_path', None),
+        game_models_path=getattr(args, 'game_models_path', None),
+        stats_output_path=getattr(args, 'stats_output_path', None),
+        fine_tune_model_path=getattr(args, 'fine_tune_model_path', None),
+    )
+
+    # Apply training parameter overrides
+    if getattr(args, 'epochs', None) is not None:
+        TRAINING_CONFIG['epochs'] = args.epochs
+    if getattr(args, 'imgsz', None) is not None:
+        TRAINING_CONFIG['imgsz'] = args.imgsz
+    if getattr(args, 'batch', None) is not None:
+        TRAINING_CONFIG['batch'] = args.batch
+    if getattr(args, 'patience', None) is not None:
+        TRAINING_CONFIG['patience'] = args.patience
+    if getattr(args, 'lr0', None) is not None:
+        TRAINING_CONFIG['lr0'] = args.lr0
+    if getattr(args, 'device', None) is not None:
+        TRAINING_CONFIG['device'] = args.device
+    if getattr(args, 'workers', None) is not None:
+        TRAINING_CONFIG['workers'] = args.workers
+    if getattr(args, 'cache', None) is not None:
+        TRAINING_CONFIG['cache'] = args.cache
+    if getattr(args, 'amp', None) is not None:
+        TRAINING_CONFIG['amp'] = args.amp
+
+
+# =============================================================================
+# PATHS - Auto-calculated based on configuration
 # =============================================================================
 
 # Get the script directory and project root
@@ -29,7 +175,52 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 TRAINING_TOOL_DIR = SCRIPT_DIR.parent
 PROJECT_ROOT = TRAINING_TOOL_DIR.parent.parent
 
-# Training data paths
+
+def _recalculate_paths():
+    """Recalculate all path variables based on current runtime config."""
+    global GAME_ID, MODEL_NAME, BASE_MODEL
+    global TRAINING_DATA_DIR, IMAGES_DIR, LABELS_DIR, CLASSES_FILE, DATASET_YAML
+    global TRAIN_IMAGES_DIR, TRAIN_LABELS_DIR, VAL_IMAGES_DIR, VAL_LABELS_DIR
+    global GAME_MODELS_DIR
+
+    cfg = _runtime_config
+
+    # Update simple values
+    GAME_ID = cfg.game_id
+    MODEL_NAME = cfg.model_name
+    BASE_MODEL = cfg.base_model
+
+    # Calculate training data path
+    if cfg.training_data_path:
+        TRAINING_DATA_DIR = Path(cfg.training_data_path)
+    else:
+        TRAINING_DATA_DIR = TRAINING_TOOL_DIR / "training_data" / GAME_ID
+
+    # Derived paths
+    IMAGES_DIR = TRAINING_DATA_DIR / "images"
+    LABELS_DIR = TRAINING_DATA_DIR / "labels"
+    CLASSES_FILE = TRAINING_DATA_DIR / "classes.txt"
+    DATASET_YAML = TRAINING_DATA_DIR / "dataset.yaml"
+
+    # Split dataset paths
+    TRAIN_IMAGES_DIR = TRAINING_DATA_DIR / "train" / "images"
+    TRAIN_LABELS_DIR = TRAINING_DATA_DIR / "train" / "labels"
+    VAL_IMAGES_DIR = TRAINING_DATA_DIR / "val" / "images"
+    VAL_LABELS_DIR = TRAINING_DATA_DIR / "val" / "labels"
+
+    # Output paths
+    if cfg.game_models_path:
+        GAME_MODELS_DIR = Path(cfg.game_models_path)
+    else:
+        GAME_MODELS_DIR = PROJECT_ROOT / "GameModels" / GAME_ID
+
+
+# Initialize with defaults
+GAME_ID = _DEFAULT_GAME_ID
+MODEL_NAME = _DEFAULT_MODEL_NAME
+BASE_MODEL = _DEFAULT_BASE_MODEL
+
+# Training data paths (will be recalculated if overrides applied)
 TRAINING_DATA_DIR = TRAINING_TOOL_DIR / "training_data" / GAME_ID
 IMAGES_DIR = TRAINING_DATA_DIR / "images"
 LABELS_DIR = TRAINING_DATA_DIR / "labels"
@@ -67,11 +258,11 @@ TRAINING_CONFIG = {
 
     # EPOCHS: Number of complete passes through the training data
     # Range: 50-600+
-    # - 100-150: Quick experiments, small datasets
+    # - 100-150: Quick experiments, small datasets, fine-tuning
     # - 200-300: Standard training, good results
     # - 300-600: Maximum accuracy, large datasets
     # Watch validation metrics - stop early if val_loss stops improving
-    "epochs": 250,
+    "epochs": 150,
 
     # IMGSZ: Training image resolution (square)
     # Range: 320-1920

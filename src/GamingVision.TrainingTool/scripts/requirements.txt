@@ -1,4 +1,14 @@
+# PyTorch with CUDA 13.0 support (must be installed first)
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+
+# YOLO training framework
 ultralytics
-labelImg
+
+# Annotation tool
+mlabelImg
+
+# Other dependencies
 pyyaml>=6.0
 pillow>=9.0.0

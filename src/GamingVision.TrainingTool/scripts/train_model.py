@@ -2,7 +2,7 @@
 Train YOLO model for GamingVision.
 
 This script:
-1. Loads a pretrained YOLOv11 model
+1. Loads a pretrained YOLOv11 model (or fine-tunes from existing best.pt)
 2. Trains it on your labeled dataset
 3. Saves the best model to runs/detect/{game_id}_model/
 
@@ -18,6 +18,15 @@ Usage:
 
     # Resume interrupted training:
     py -3.10 train_model.py --resume
+
+    # Skip confirmation prompts (for automation):
+    py -3.10 train_model.py --auto-yes
+
+    # Fine-tune from existing model:
+    py -3.10 train_model.py --fine-tune-model-path "path/to/best.pt"
+
+    # Override paths via CLI:
+    py -3.10 train_model.py --game-id arc_raiders --training-data-path "C:\\data"
 """
 
 import argparse
@@ -37,6 +46,9 @@ from config import (
     print_config,
     validate_paths,
     get_class_names,
+    add_config_arguments,
+    apply_args_to_config,
+    get_runtime_config,
 )
 
 
@@ -57,14 +69,23 @@ def check_prerequisites():
     return True
 
 
-def train_model(epochs: int = None, resume: bool = False):
-    """Train the YOLO model."""
+def train_model(epochs: int = None, resume: bool = False, fine_tune_model_path: str = None):
+    """Train the YOLO model.
+
+    Args:
+        epochs: Number of training epochs (None = use config default)
+        resume: Resume from last checkpoint
+        fine_tune_model_path: Path to existing best.pt for fine-tuning
+    """
     try:
         from ultralytics import YOLO
     except ImportError:
         print("ERROR: ultralytics not installed!")
         print("Run: py -3.10 -m pip install ultralytics")
         return None
+
+    # Re-import to get potentially updated values after apply_args_to_config
+    from config import GAME_ID, BASE_MODEL, RUNS_DIR
 
     # Use custom epochs if provided
     training_epochs = epochs if epochs else TRAINING_CONFIG["epochs"]
@@ -84,9 +105,21 @@ def train_model(epochs: int = None, resume: bool = False):
         model = YOLO(str(last_weights))
         results = model.train(resume=True)
     else:
-        # Start fresh training
-        print(f"\nLoading base model: {BASE_MODEL}")
-        model = YOLO(BASE_MODEL)
+        # Determine base model: fine-tune path > runtime config > default
+        runtime_cfg = get_runtime_config()
+        base_model_to_use = fine_tune_model_path or runtime_cfg.fine_tune_model_path or BASE_MODEL
+
+        # Check if fine-tuning from existing model
+        if base_model_to_use != BASE_MODEL:
+            base_path = Path(base_model_to_use)
+            if not base_path.exists():
+                print(f"ERROR: Fine-tune model not found: {base_model_to_use}")
+                return None
+            print(f"\nFine-tuning from existing model: {base_model_to_use}")
+        else:
+            print(f"\nLoading base model: {base_model_to_use}")
+
+        model = YOLO(str(base_model_to_use))
 
         print(f"Starting training for {training_epochs} epochs...")
         print(f"Output directory: {output_dir}")
@@ -173,7 +206,18 @@ def main():
     parser = argparse.ArgumentParser(description="Train YOLO model for GamingVision")
     parser.add_argument("--epochs", type=int, help="Number of training epochs")
     parser.add_argument("--resume", action="store_true", help="Resume interrupted training")
+    parser.add_argument("--auto-yes", action="store_true", help="Skip confirmation prompts (for automation)")
+
+    # Add config override arguments
+    add_config_arguments(parser)
+
     args = parser.parse_args()
+
+    # Apply config overrides from CLI arguments
+    apply_args_to_config(args)
+
+    # Re-import to get updated values
+    from config import GAME_ID, RUNS_DIR, DATASET_YAML
 
     # Print configuration
     print_config()
@@ -196,15 +240,19 @@ def main():
         print(f"  {i}: {name}")
     print()
 
-    # Confirm before training
-    if not args.resume:
+    # Confirm before training (skip if --auto-yes)
+    if not args.resume and not args.auto_yes:
         response = input("Start training? [Y/n]: ").strip().lower()
         if response and response != 'y':
             print("Training cancelled.")
             sys.exit(0)
 
     # Train
-    results = train_model(epochs=args.epochs, resume=args.resume)
+    results = train_model(
+        epochs=args.epochs,
+        resume=args.resume,
+        fine_tune_model_path=getattr(args, 'fine_tune_model_path', None)
+    )
 
     if results is not None:
         output_dir = RUNS_DIR / f"{GAME_ID}_model"

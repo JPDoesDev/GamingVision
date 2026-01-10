@@ -1,0 +1,150 @@
+<Window x:Class="GamingVision.Views.PrerequisitesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Training Prerequisites"
+        Height="475"
+        Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Training Prerequisites Dialog">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0"
+                   Text="GPU Training Prerequisites"
+                   FontSize="16"
+                   FontWeight="Bold"
+                   Margin="0,0,0,10"/>
+
+        <!-- Warning Message -->
+        <Border Grid.Row="1"
+                Background="#FFF3CD"
+                BorderBrush="#FFECB5"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="10"
+                Margin="0,0,0,15">
+            <TextBlock Text="Some prerequisites for GPU training are not met. Training will use CPU mode which is significantly slower (10-50x). Install the missing components below for faster training."
+                       TextWrapping="Wrap"
+                       Foreground="#856404"/>
+        </Border>
+
+        <!-- Prerequisites List -->
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Python 3.10 -->
+            <TextBlock Grid.Row="0" Grid.Column="0"
+                       x:Name="PythonIcon"
+                       FontFamily="Consolas"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <TextBlock Grid.Row="0" Grid.Column="1"
+                       x:Name="PythonStatus"
+                       VerticalAlignment="Center"
+                       Margin="10,8"/>
+            <Button Grid.Row="0" Grid.Column="2"
+                    x:Name="PythonDownloadBtn"
+                    Content="Download"
+                    Click="PythonDownload_Click"
+                    MinWidth="80"
+                    Margin="5,5"/>
+
+            <!-- CUDA 13.0 -->
+            <TextBlock Grid.Row="1" Grid.Column="0"
+                       x:Name="CudaIcon"
+                       FontFamily="Consolas"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <TextBlock Grid.Row="1" Grid.Column="1"
+                       x:Name="CudaStatus"
+                       VerticalAlignment="Center"
+                       Margin="10,8"/>
+            <Button Grid.Row="1" Grid.Column="2"
+                    x:Name="CudaDownloadBtn"
+                    Content="Download"
+                    Click="CudaDownload_Click"
+                    MinWidth="80"
+                    Margin="5,5"/>
+
+            <!-- PyTorch -->
+            <TextBlock Grid.Row="2" Grid.Column="0"
+                       x:Name="PytorchIcon"
+                       FontFamily="Consolas"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <TextBlock Grid.Row="2" Grid.Column="1"
+                       x:Name="PytorchStatus"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="10,8"/>
+            <Button Grid.Row="2" Grid.Column="2"
+                    x:Name="PytorchInstallBtn"
+                    Content="Install"
+                    Click="PytorchInstall_Click"
+                    MinWidth="80"
+                    Margin="5,5"
+                    ToolTip="pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130"/>
+
+            <!-- Packages -->
+            <TextBlock Grid.Row="3" Grid.Column="0"
+                       x:Name="PackagesIcon"
+                       FontFamily="Consolas"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="0,8"/>
+            <TextBlock Grid.Row="3" Grid.Column="1"
+                       x:Name="PackagesStatus"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="10,8"/>
+            <Button Grid.Row="3" Grid.Column="2"
+                    x:Name="PackagesInstallBtn"
+                    Content="Install"
+                    Click="PackagesInstall_Click"
+                    MinWidth="80"
+                    Margin="5,5"
+                    ToolTip="pip install -r requirements.txt"/>
+        </Grid>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,15,0,0">
+            <Button Content="Continue with CPU"
+                    Click="ContinueCpu_Click"
+                    MinWidth="120"
+                    Margin="0,0,10,0"
+                    ToolTip="Training will be slower but will work"/>
+            <Button Content="Cancel"
+                    Click="Cancel_Click"
+                    MinWidth="80"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

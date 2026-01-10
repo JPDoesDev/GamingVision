@@ -11,30 +11,36 @@ Run this AFTER labeling images with LabelImg.
 
 Usage:
     py -3.10 split_dataset.py
+
+    # Override paths via CLI:
+    py -3.10 split_dataset.py --training-data-path "C:\\GamingVision\\New_Training_Data\\arc_raiders"
+
+    # Custom split ratio:
+    py -3.10 split_dataset.py --train-ratio 0.9
+
+    # Random each time (no fixed seed):
+    py -3.10 split_dataset.py --no-seed
 """
 
+import argparse
 import os
 import shutil
 import random
 from pathlib import Path
 import yaml
 
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+
+import config
 from config import (
-    GAME_ID,
-    TRAINING_DATA_DIR,
-    IMAGES_DIR,
-    LABELS_DIR,
-    CLASSES_FILE,
-    DATASET_YAML,
-    TRAIN_IMAGES_DIR,
-    TRAIN_LABELS_DIR,
-    VAL_IMAGES_DIR,
-    VAL_LABELS_DIR,
     get_class_names,
     validate_paths,
+    add_config_arguments,
+    apply_args_to_config,
 )
 
-# Train/validation split ratio
+# Train/validation split ratio (can be overridden via --train-ratio)
 TRAIN_RATIO = 0.8
 
 # Random seed for reproducibility (set to None for random each time)
@@ -45,12 +51,12 @@ def get_labeled_images() -> list[str]:
     """Get list of images that have corresponding label files."""
     labeled = []
 
-    for img_path in IMAGES_DIR.iterdir():
+    for img_path in config.IMAGES_DIR.iterdir():
         if img_path.suffix.lower() not in ['.jpg', '.jpeg', '.png']:
             continue
 
         # Check if label file exists
-        label_path = LABELS_DIR / (img_path.stem + '.txt')
+        label_path = config.LABELS_DIR / (img_path.stem + '.txt')
         if label_path.exists():
             # Check if label file has content (not empty)
             content = label_path.read_text().strip()
@@ -66,7 +72,7 @@ def get_labeled_images() -> list[str]:
 
 def clear_split_folders():
     """Remove existing train/val folders."""
-    for folder in [TRAIN_IMAGES_DIR, TRAIN_LABELS_DIR, VAL_IMAGES_DIR, VAL_LABELS_DIR]:
+    for folder in [config.TRAIN_IMAGES_DIR, config.TRAIN_LABELS_DIR, config.VAL_IMAGES_DIR, config.VAL_LABELS_DIR]:
         if folder.exists():
             shutil.rmtree(folder)
         folder.mkdir(parents=True, exist_ok=True)
@@ -76,13 +82,13 @@ def copy_files(image_names: list[str], dest_images: Path, dest_labels: Path):
     """Copy images and their labels to destination folders."""
     for img_name in image_names:
         # Copy image
-        src_img = IMAGES_DIR / img_name
+        src_img = config.IMAGES_DIR / img_name
         dst_img = dest_images / img_name
         shutil.copy2(src_img, dst_img)
 
         # Copy label
         label_name = Path(img_name).stem + '.txt'
-        src_label = LABELS_DIR / label_name
+        src_label = config.LABELS_DIR / label_name
         dst_label = dest_labels / label_name
         if src_label.exists():
             shutil.copy2(src_label, dst_label)
@@ -96,22 +102,48 @@ def create_dataset_yaml():
     names = {i: name for i, name in enumerate(class_names)}
 
     dataset_config = {
-        'path': str(TRAINING_DATA_DIR.as_posix()),
+        'path': str(config.TRAINING_DATA_DIR.as_posix()),
         'train': 'train/images',
         'val': 'val/images',
         'names': names,
     }
 
-    with open(DATASET_YAML, 'w') as f:
+    with open(config.DATASET_YAML, 'w') as f:
         yaml.dump(dataset_config, f, default_flow_style=False, sort_keys=False)
 
-    print(f"Created {DATASET_YAML}")
+    print(f"Created {config.DATASET_YAML}")
 
 
 def main():
+    global TRAIN_RATIO, RANDOM_SEED
+
+    parser = argparse.ArgumentParser(description="Split dataset into train/val sets")
+    parser.add_argument("--train-ratio", type=float, default=0.8,
+                        help="Train/validation split ratio (default: 0.8)")
+    parser.add_argument("--no-seed", action="store_true",
+                        help="Use random seed each time (not reproducible)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for reproducibility (default: 42)")
+
+    # Add config override arguments
+    add_config_arguments(parser)
+
+    args = parser.parse_args()
+
+    # Apply config overrides from CLI arguments
+    apply_args_to_config(args)
+
+    # Apply split-specific overrides
+    TRAIN_RATIO = args.train_ratio
+    RANDOM_SEED = None if args.no_seed else args.seed
+
     print("=" * 60)
-    print(f"Dataset Splitter for: {GAME_ID}")
+    print(f"Dataset Splitter for: {config.GAME_ID}")
     print("=" * 60)
+    print()
+    print(f"Training data: {config.TRAINING_DATA_DIR}")
+    print(f"Train ratio:   {TRAIN_RATIO:.0%}")
+    print(f"Random seed:   {RANDOM_SEED if RANDOM_SEED is not None else 'random'}")
     print()
 
     # Validate paths
@@ -152,10 +184,10 @@ def main():
 
     # Copy files
     print("Copying training files...")
-    copy_files(train_images, TRAIN_IMAGES_DIR, TRAIN_LABELS_DIR)
+    copy_files(train_images, config.TRAIN_IMAGES_DIR, config.TRAIN_LABELS_DIR)
 
     print("Copying validation files...")
-    copy_files(val_images, VAL_IMAGES_DIR, VAL_LABELS_DIR)
+    copy_files(val_images, config.VAL_IMAGES_DIR, config.VAL_LABELS_DIR)
 
     # Create dataset.yaml
     print("\nCreating dataset.yaml...")
@@ -166,11 +198,11 @@ def main():
     print("=" * 60)
     print("Dataset split complete!")
     print("=" * 60)
-    print(f"  Train images: {TRAIN_IMAGES_DIR}")
-    print(f"  Train labels: {TRAIN_LABELS_DIR}")
-    print(f"  Val images:   {VAL_IMAGES_DIR}")
-    print(f"  Val labels:   {VAL_LABELS_DIR}")
-    print(f"  Config:       {DATASET_YAML}")
+    print(f"  Train images: {config.TRAIN_IMAGES_DIR}")
+    print(f"  Train labels: {config.TRAIN_LABELS_DIR}")
+    print(f"  Val images:   {config.VAL_IMAGES_DIR}")
+    print(f"  Val labels:   {config.VAL_LABELS_DIR}")
+    print(f"  Config:       {config.DATASET_YAML}")
     print()
     print("Next step: Run train_model.py to start training")
 

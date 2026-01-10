@@ -7,6 +7,7 @@ This script:
 3. Copies ONNX models to GameModels/{game_id}/
 4. Creates label file for GamingVision
 5. Optionally updates game_config.json
+6. Copies best.pt to GameModels for future fine-tuning
 
 Prerequisites:
     Complete training with train_model.py
@@ -22,6 +23,12 @@ Usage:
 
     # Export only specific size (640 or 1440):
     py -3.10 export_model.py --size 640
+
+    # Override paths via CLI:
+    py -3.10 export_model.py --game-models-path "C:\\GameModels\\arc_raiders"
+
+    # Specify custom weights path:
+    py -3.10 export_model.py --weights-path "path/to/best.pt"
 """
 
 import argparse
@@ -43,6 +50,9 @@ from config import (
     EXPORT_CONFIG,
     get_class_names,
     print_config,
+    add_config_arguments,
+    apply_args_to_config,
+    get_runtime_config,
 )
 
 
@@ -185,7 +195,23 @@ def main():
                         help="Export only, don't copy to GameModels")
     parser.add_argument("--size", type=int, choices=[640, 1440],
                         help="Export only specific size (default: both 640 and 1440)")
+    parser.add_argument("--weights-path", type=str,
+                        help="Path to weights file (overrides auto-detection)")
+    parser.add_argument("--save-pt", action="store_true", default=True,
+                        help="Save best.pt to GameModels for future fine-tuning (default: True)")
+    parser.add_argument("--no-save-pt", action="store_true",
+                        help="Don't save best.pt to GameModels")
+
+    # Add config override arguments
+    add_config_arguments(parser)
+
     args = parser.parse_args()
+
+    # Apply config overrides from CLI arguments
+    apply_args_to_config(args)
+
+    # Re-import to get updated values
+    from config import GAME_ID, MODEL_NAME, RUNS_DIR, GAME_MODELS_DIR
 
     # Determine which sizes to export
     if args.size:
@@ -200,7 +226,12 @@ def main():
     # Find trained model
     print("\nLooking for trained model...")
     try:
-        weights_path = find_trained_model(use_last=args.use_last)
+        if args.weights_path:
+            weights_path = Path(args.weights_path)
+            if not weights_path.exists():
+                raise FileNotFoundError(f"Weights file not found: {weights_path}")
+        else:
+            weights_path = find_trained_model(use_last=args.use_last)
         print(f"Found: {weights_path}")
     except FileNotFoundError as e:
         print(f"ERROR: {e}")
@@ -240,6 +271,14 @@ def main():
         )
         update_game_config(f"{default_model}.onnx")
         suggest_label_config()
+
+    # Save best.pt to GameModels for future fine-tuning
+    if not args.no_deploy and not args.no_save_pt:
+        print("\nSaving best.pt for future fine-tuning...")
+        target_pt = GAME_MODELS_DIR / "best.pt"
+        shutil.copy2(weights_path, target_pt)
+        print(f"  Saved: {target_pt}")
+        print("  (Use this with --fine-tune-model-path for incremental training)")
 
     # Final summary
     print()

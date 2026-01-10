@@ -8,10 +8,19 @@ Unified script that handles the complete training workflow:
 4. Export to ONNX and deploy
 
 Usage:
-    py -3.10 train_pipeline.py              # Run full pipeline with prompts
-    py -3.10 train_pipeline.py --skip-to 2  # Skip to step 2 (split)
-    py -3.10 train_pipeline.py --skip-to 3  # Skip to step 3 (train)
-    py -3.10 train_pipeline.py --skip-to 4  # Skip to step 4 (export)
+    py -3.10 01_train_pipeline.py              # Run full pipeline
+    py -3.10 01_train_pipeline.py --skip-to 2  # Skip to step 2 (split)
+    py -3.10 01_train_pipeline.py --skip-to 3  # Skip to step 3 (train)
+    py -3.10 01_train_pipeline.py --skip-to 4  # Skip to step 4 (export)
+
+    # Automation mode (no prompts):
+    py -3.10 01_train_pipeline.py --auto-yes
+
+    # Fine-tune mode (use existing model):
+    py -3.10 01_train_pipeline.py --auto-yes --fine-tune-model-path "path/to/best.pt"
+
+    # Override paths:
+    py -3.10 01_train_pipeline.py --auto-yes --training-data-path "C:\\data" --game-models-path "C:\\models"
 """
 
 import argparse
@@ -23,26 +32,24 @@ from pathlib import Path
 # Add scripts directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
+import config
 from config import (
-    GAME_ID,
-    MODEL_NAME,
-    BASE_MODEL,
-    TRAINING_DATA_DIR,
-    IMAGES_DIR,
-    LABELS_DIR,
-    TRAIN_IMAGES_DIR,
-    TRAIN_LABELS_DIR,
-    VAL_IMAGES_DIR,
-    VAL_LABELS_DIR,
-    RUNS_DIR,
-    GAME_MODELS_DIR,
-    CLASSES_FILE,
-    DATASET_YAML,
     TRAINING_CONFIG,
     EXPORT_CONFIG,
     get_class_names,
     print_config,
+    add_config_arguments,
+    apply_args_to_config,
+    get_runtime_config,
 )
+
+
+# =============================================================================
+# GLOBAL STATE
+# =============================================================================
+
+# Set to True to skip all prompts (for automation)
+AUTO_YES = False
 
 
 # =============================================================================
@@ -50,7 +57,14 @@ from config import (
 # =============================================================================
 
 def prompt_yes_no(message: str, default: bool = True) -> bool:
-    """Prompt user for yes/no confirmation."""
+    """Prompt user for yes/no confirmation.
+
+    If AUTO_YES is True, always returns default without prompting.
+    """
+    if AUTO_YES:
+        print(f"{message} [auto-yes: {'Y' if default else 'N'}]")
+        return default
+
     suffix = " (Y/n): " if default else " (y/N): "
     while True:
         response = input(message + suffix).strip().lower()
@@ -73,17 +87,17 @@ def print_step(step_num: int, title: str):
 
 def print_warning(message: str):
     """Print a warning message."""
-    print(f"\n⚠️  WARNING: {message}")
+    print(f"\n[!] WARNING: {message}")
 
 
 def print_success(message: str):
     """Print a success message."""
-    print(f"\n✓ {message}")
+    print(f"\n[OK] {message}")
 
 
 def print_error(message: str):
     """Print an error message."""
-    print(f"\n✗ ERROR: {message}")
+    print(f"\n[X] ERROR: {message}")
 
 
 def count_files(directory: Path, pattern: str = "*") -> int:
@@ -102,13 +116,13 @@ def step_clean() -> bool:
     print_step(1, "CLEAN TRAIN/VAL FOLDERS")
 
     # Show what will be cleaned
-    train_dir = TRAINING_DATA_DIR / "train"
-    val_dir = TRAINING_DATA_DIR / "val"
+    train_dir = config.TRAINING_DATA_DIR / "train"
+    val_dir = config.TRAINING_DATA_DIR / "val"
 
-    train_images = count_files(TRAIN_IMAGES_DIR, "*.jpg") + count_files(TRAIN_IMAGES_DIR, "*.png")
-    train_labels = count_files(TRAIN_LABELS_DIR, "*.txt")
-    val_images = count_files(VAL_IMAGES_DIR, "*.jpg") + count_files(VAL_IMAGES_DIR, "*.png")
-    val_labels = count_files(VAL_LABELS_DIR, "*.txt")
+    train_images = count_files(config.TRAIN_IMAGES_DIR, "*.jpg") + count_files(config.TRAIN_IMAGES_DIR, "*.png")
+    train_labels = count_files(config.TRAIN_LABELS_DIR, "*.txt")
+    val_images = count_files(config.VAL_IMAGES_DIR, "*.jpg") + count_files(config.VAL_IMAGES_DIR, "*.png")
+    val_labels = count_files(config.VAL_LABELS_DIR, "*.txt")
 
     print(f"\nFolders to clean:")
     print(f"  {train_dir}")
@@ -125,9 +139,9 @@ def step_clean() -> bool:
         return True
 
     print(f"\nTotal: {total} files will be deleted")
-    print("\n⚠️  Original images/labels folders will NOT be modified:")
-    print(f"  {IMAGES_DIR}")
-    print(f"  {LABELS_DIR}")
+    print("\n[!] Original images/labels folders will NOT be modified:")
+    print(f"  {config.IMAGES_DIR}")
+    print(f"  {config.LABELS_DIR}")
 
     if not prompt_yes_no("\nClean train/val folders?"):
         print("Skipping clean step.")
@@ -158,12 +172,12 @@ def step_split() -> bool:
     print_step(2, "SPLIT DATASET")
 
     # Check source data
-    image_count = count_files(IMAGES_DIR, "*.jpg") + count_files(IMAGES_DIR, "*.png")
-    label_count = count_files(LABELS_DIR, "*.txt")
+    image_count = count_files(config.IMAGES_DIR, "*.jpg") + count_files(config.IMAGES_DIR, "*.png")
+    label_count = count_files(config.LABELS_DIR, "*.txt")
 
     print(f"\nSource data:")
-    print(f"  Images: {image_count} files in {IMAGES_DIR}")
-    print(f"  Labels: {label_count} files in {LABELS_DIR}")
+    print(f"  Images: {image_count} files in {config.IMAGES_DIR}")
+    print(f"  Labels: {label_count} files in {config.LABELS_DIR}")
 
     if image_count == 0:
         print_error("No images found! Capture and label images first.")
@@ -174,8 +188,8 @@ def step_split() -> bool:
         return False
 
     # Check classes.txt
-    if not CLASSES_FILE.exists():
-        print_error(f"classes.txt not found at {CLASSES_FILE}")
+    if not config.CLASSES_FILE.exists():
+        print_error(f"classes.txt not found at {config.CLASSES_FILE}")
         return False
 
     class_names = get_class_names()
@@ -223,15 +237,15 @@ def step_split() -> bool:
 
         # Copy files
         print("Copying training files...")
-        copy_files(train_images, TRAIN_IMAGES_DIR, TRAIN_LABELS_DIR)
+        copy_files(train_images, config.TRAIN_IMAGES_DIR, config.TRAIN_LABELS_DIR)
 
         print("Copying validation files...")
-        copy_files(val_images, VAL_IMAGES_DIR, VAL_LABELS_DIR)
+        copy_files(val_images, config.VAL_IMAGES_DIR, config.VAL_LABELS_DIR)
 
         # Create dataset.yaml
         print("\nCreating dataset.yaml...")
         create_dataset_yaml()
-        print(f"  Created: {DATASET_YAML}")
+        print(f"  Created: {config.DATASET_YAML}")
 
         print_success("Dataset split successfully")
         return True
@@ -251,27 +265,43 @@ def step_train() -> bool:
     print_step(3, "TRAIN MODEL")
 
     # Check prerequisites
-    if not DATASET_YAML.exists():
-        print_error(f"dataset.yaml not found at {DATASET_YAML}")
+    if not config.DATASET_YAML.exists():
+        print_error(f"dataset.yaml not found at {config.DATASET_YAML}")
         print("Run the split step first.")
         return False
 
-    train_images = count_files(TRAIN_IMAGES_DIR, "*.jpg") + count_files(TRAIN_IMAGES_DIR, "*.png")
-    val_images = count_files(VAL_IMAGES_DIR, "*.jpg") + count_files(VAL_IMAGES_DIR, "*.png")
+    train_images = count_files(config.TRAIN_IMAGES_DIR, "*.jpg") + count_files(config.TRAIN_IMAGES_DIR, "*.png")
+    val_images = count_files(config.VAL_IMAGES_DIR, "*.jpg") + count_files(config.VAL_IMAGES_DIR, "*.png")
 
     if train_images == 0:
         print_error("No training images found! Run the split step first.")
         return False
 
+    # Determine base model (support fine-tuning)
+    runtime_cfg = get_runtime_config()
+    base_model_to_use = runtime_cfg.fine_tune_model_path or config.BASE_MODEL
+    is_fine_tuning = base_model_to_use != config.BASE_MODEL
+
+    if is_fine_tuning:
+        base_model_path = Path(base_model_to_use)
+        if not base_model_path.exists():
+            print_error(f"Fine-tune model not found: {base_model_to_use}")
+            return False
+
     print(f"\nTraining configuration:")
-    print(f"  Dataset:    {DATASET_YAML}")
+    print(f"  Dataset:    {config.DATASET_YAML}")
     print(f"  Train:      {train_images} images")
     print(f"  Validation: {val_images} images")
-    print(f"  Base model: {BASE_MODEL}")
+    if is_fine_tuning:
+        print(f"  Mode:       FINE-TUNING from existing model")
+        print(f"  Base model: {base_model_to_use}")
+    else:
+        print(f"  Mode:       FULL TRAINING from scratch")
+        print(f"  Base model: {config.BASE_MODEL}")
     print(f"  Epochs:     {TRAINING_CONFIG['epochs']}")
     print(f"  Image size: {TRAINING_CONFIG['imgsz']}")
     print(f"  Device:     {TRAINING_CONFIG['device']}")
-    print(f"  Output:     {RUNS_DIR / f'{GAME_ID}_model'}")
+    print(f"  Output:     {config.RUNS_DIR / f'{config.GAME_ID}_model'}")
 
     print_warning("Training may take a long time depending on dataset size and hardware.")
 
@@ -283,22 +313,25 @@ def step_train() -> bool:
     try:
         from ultralytics import YOLO
 
-        print(f"\nLoading base model: {BASE_MODEL}")
-        model = YOLO(BASE_MODEL)
+        if is_fine_tuning:
+            print(f"\nFine-tuning from: {base_model_to_use}")
+        else:
+            print(f"\nLoading base model: {config.BASE_MODEL}")
+        model = YOLO(str(base_model_to_use))
 
         print("Starting training...\n")
         print("-" * 60)
 
         # Build training arguments (matching train_model.py)
         train_args = {
-            "data": str(DATASET_YAML),
+            "data": str(config.DATASET_YAML),
             "device": TRAINING_CONFIG["device"],
             "epochs": TRAINING_CONFIG["epochs"],
             "imgsz": TRAINING_CONFIG["imgsz"],
             "batch": TRAINING_CONFIG["batch"],
             "patience": TRAINING_CONFIG["patience"],
-            "project": str(RUNS_DIR),
-            "name": f"{GAME_ID}_model",
+            "project": str(config.RUNS_DIR),
+            "name": f"{config.GAME_ID}_model",
             "exist_ok": True,
 
             # Learning rate
@@ -338,7 +371,7 @@ def step_train() -> bool:
         print_success("Training completed successfully")
 
         # Show results location
-        results_dir = RUNS_DIR / f"{GAME_ID}_model"
+        results_dir = config.RUNS_DIR / f"{config.GAME_ID}_model"
         print(f"\nResults saved to: {results_dir}")
         print(f"  Best model: {results_dir / 'weights' / 'best.pt'}")
         print(f"  Last model: {results_dir / 'weights' / 'last.pt'}")
@@ -360,7 +393,7 @@ def step_export() -> bool:
     print_step(4, "EXPORT MODEL")
 
     # Find trained model
-    weights_dir = RUNS_DIR / f"{GAME_ID}_model" / "weights"
+    weights_dir = config.RUNS_DIR / f"{config.GAME_ID}_model" / "weights"
     best_pt = weights_dir / "best.pt"
     last_pt = weights_dir / "last.pt"
 
@@ -384,9 +417,9 @@ def step_export() -> bool:
 
     print(f"\nOutput files:")
     for size in export_sizes:
-        versioned_name = f"{MODEL_NAME}_v{version}_{size}"
-        print(f"  {GAME_MODELS_DIR / f'{versioned_name}.onnx'}")
-        print(f"  {GAME_MODELS_DIR / f'{versioned_name}.txt'}")
+        versioned_name = f"{config.MODEL_NAME}_v{version}_{size}"
+        print(f"  {config.GAME_MODELS_DIR / f'{versioned_name}.onnx'}")
+        print(f"  {config.GAME_MODELS_DIR / f'{versioned_name}.txt'}")
 
     if not prompt_yes_no("\nExport model?"):
         print("Skipping export step.")
@@ -420,11 +453,11 @@ def step_export() -> bool:
             print(f"  Exported: {export_path}")
 
             # Deploy to GameModels
-            GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            config.GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-            versioned_name = f"{MODEL_NAME}_v{version}_{imgsz}"
-            target_onnx = GAME_MODELS_DIR / f"{versioned_name}.onnx"
-            target_labels = GAME_MODELS_DIR / f"{versioned_name}.txt"
+            versioned_name = f"{config.MODEL_NAME}_v{version}_{imgsz}"
+            target_onnx = config.GAME_MODELS_DIR / f"{versioned_name}.onnx"
+            target_labels = config.GAME_MODELS_DIR / f"{versioned_name}.txt"
 
             shutil.copy2(export_path, target_onnx)
             print(f"  Copied: {target_onnx}")
@@ -445,11 +478,11 @@ def step_export() -> bool:
             deployed_models.append((versioned_name, imgsz))
 
         # Update game_config.json to use 640 (speed) model by default
-        config_path = GAME_MODELS_DIR / "game_config.json"
+        config_path = config.GAME_MODELS_DIR / "game_config.json"
         if config_path.exists():
             import json
             with open(config_path, 'r') as f:
-                config = json.load(f)
+                game_cfg = json.load(f)
 
             # Use 640 model as default
             default_model = next(
@@ -457,11 +490,11 @@ def step_export() -> bool:
                 deployed_models[0][0]
             )
 
-            old_model = config.get("modelFile", "")
-            config["modelFile"] = f"{default_model}.onnx"
+            old_model = game_cfg.get("modelFile", "")
+            game_cfg["modelFile"] = f"{default_model}.onnx"
 
             with open(config_path, 'w') as f:
-                json.dump(config, f, indent=2)
+                json.dump(game_cfg, f, indent=2)
 
             print(f"\nUpdated game_config.json:")
             print(f"  modelFile: {old_model} -> {default_model}.onnx")
@@ -490,6 +523,8 @@ def step_export() -> bool:
 # =============================================================================
 
 def main():
+    global AUTO_YES
+
     parser = argparse.ArgumentParser(
         description="GamingVision Training Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -501,9 +536,10 @@ Steps:
   4. Export   - Export to ONNX and deploy
 
 Examples:
-  py -3.10 train_pipeline.py              # Run full pipeline
-  py -3.10 train_pipeline.py --skip-to 3  # Skip to training
-  py -3.10 train_pipeline.py --skip-to 4  # Skip to export only
+  py -3.10 01_train_pipeline.py              # Run full pipeline
+  py -3.10 01_train_pipeline.py --skip-to 3  # Skip to training
+  py -3.10 01_train_pipeline.py --skip-to 4  # Skip to export only
+  py -3.10 01_train_pipeline.py --auto-yes   # No prompts (automation)
         """
     )
     parser.add_argument(
@@ -513,13 +549,31 @@ Examples:
         default=1,
         help="Skip to step number (1=clean, 2=split, 3=train, 4=export)"
     )
+    parser.add_argument(
+        "--auto-yes",
+        action="store_true",
+        help="Skip all confirmation prompts (for automation)"
+    )
+
+    # Add config override arguments
+    add_config_arguments(parser)
+
     args = parser.parse_args()
+
+    # Set global auto-yes mode
+    AUTO_YES = args.auto_yes
+
+    # Apply config overrides from CLI arguments
+    apply_args_to_config(args)
 
     # Print header
     print()
     print("=" * 60)
     print("GamingVision Training Pipeline")
     print("=" * 60)
+
+    if AUTO_YES:
+        print("\n[AUTO-YES MODE: All prompts will be auto-confirmed]")
 
     # Print configuration
     print_config()
@@ -534,11 +588,11 @@ Examples:
     ]
 
     for num, name, desc in steps:
-        marker = "→" if num >= args.skip_to else "○"
+        marker = "->" if num >= args.skip_to else "o"
         print(f"  {marker} Step {num}: {name} - {desc}")
 
     if args.skip_to > 1:
-        print(f"\n⚠️  Starting from step {args.skip_to}")
+        print(f"\n[!] Starting from step {args.skip_to}")
 
     if not prompt_yes_no("\nBegin pipeline?"):
         print("\nPipeline cancelled.")
@@ -551,25 +605,25 @@ Examples:
         success = step_clean()
         if not success:
             print_error("Pipeline failed at step 1 (Clean)")
-            return
+            sys.exit(1)
 
     if args.skip_to <= 2 and success:
         success = step_split()
         if not success:
             print_error("Pipeline failed at step 2 (Split)")
-            return
+            sys.exit(1)
 
     if args.skip_to <= 3 and success:
         success = step_train()
         if not success:
             print_error("Pipeline failed at step 3 (Train)")
-            return
+            sys.exit(1)
 
     if args.skip_to <= 4 and success:
         success = step_export()
         if not success:
             print_error("Pipeline failed at step 4 (Export)")
-            return
+            sys.exit(1)
 
     # Final summary
     print()
@@ -580,7 +634,7 @@ Examples:
     print("Your model is ready to use in GamingVision!")
     print()
     print("Next steps:")
-    print(f"  1. Review {GAME_MODELS_DIR / 'game_config.json'}")
+    print(f"  1. Review {config.GAME_MODELS_DIR / 'game_config.json'}")
     print("  2. Configure label tiers (primaryLabels, secondaryLabels, etc.)")
     print("  3. Run GamingVision:")
     print("     dotnet run -c Release --project src\\GamingVision")

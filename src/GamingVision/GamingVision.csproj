@@ -72,6 +72,18 @@
     </Content>
   </ItemGroup>
 
+  <!-- Include training scripts for in-app training workflow -->
+  <ItemGroup>
+    <Content Include="..\GamingVision.TrainingTool\scripts\*.py">
+      <Link>scripts\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\GamingVision.TrainingTool\scripts\requirements.txt">
+      <Link>scripts\requirements.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- Clean up empty platform folders created by ONNX Runtime DirectML package -->
   <Target Name="CleanupUnusedPlatformFolders" AfterTargets="Build">
     <RemoveDir Directories="$(MSBuildProjectDirectory)\bin\ARM" Condition="Exists('$(MSBuildProjectDirectory)\bin\ARM')" />
