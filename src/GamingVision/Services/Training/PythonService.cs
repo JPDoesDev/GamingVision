@@ -281,12 +281,44 @@ public class PythonService : IDisposable
     }
 
     /// <summary>
-    /// Checks if mlabelImg is installed via pip.
+    /// Checks if mlabelImg is installed by attempting to run the executable.
     /// </summary>
     public async Task<bool> IsMLabelImgInstalledAsync()
     {
-        var (installed, _) = await CheckPackageAsync("mlabelImg");
-        return installed;
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "mlabelImg",
+                Arguments = "--help",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null)
+                return false;
+
+            // Wait briefly with timeout
+            var completed = process.WaitForExit(5000);
+            if (!completed)
+            {
+                process.Kill();
+                return false;
+            }
+
+            // If we got here, the executable was found and ran
+            // Even if it exits with error (unrecognized args), it means it's installed
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Win32Exception "The system cannot find the file specified" means not installed
+            Logger.Log($"mlabelImg check failed: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>
@@ -294,23 +326,41 @@ public class PythonService : IDisposable
     /// </summary>
     /// <param name="imagesFolder">Path to images folder</param>
     /// <param name="classesFile">Path to classes.txt file (optional)</param>
+    /// <param name="saveDir">Path to save annotations (optional, defaults to labels folder next to images)</param>
     /// <returns>True if launched successfully</returns>
-    public async Task<bool> LaunchMLabelImgAsync(string imagesFolder, string? classesFile = null)
+    public async Task<bool> LaunchMLabelImgAsync(string? imagesFolder, string? classesFile = null, string? saveDir = null)
     {
         try
         {
             // Build arguments for mlabelImg
-            // mlabelImg [IMAGE_DIR] [PREDEFINED_CLASS_FILE]
+            // mlabelImg [IMAGE_DIR] [PREDEFINED_CLASS_FILE] [SAVE_DIR]
             var args = new StringBuilder();
 
             if (!string.IsNullOrEmpty(imagesFolder) && Directory.Exists(imagesFolder))
             {
                 args.Append($"\"{imagesFolder}\"");
+
+                // If no explicit save dir, use labels folder next to images
+                if (string.IsNullOrEmpty(saveDir))
+                {
+                    var parentDir = Path.GetDirectoryName(imagesFolder);
+                    if (!string.IsNullOrEmpty(parentDir))
+                    {
+                        saveDir = Path.Combine(parentDir, "labels");
+                    }
+                }
             }
 
             if (!string.IsNullOrEmpty(classesFile) && File.Exists(classesFile))
             {
                 args.Append($" \"{classesFile}\"");
+            }
+
+            if (!string.IsNullOrEmpty(saveDir))
+            {
+                // Create labels directory if it doesn't exist
+                Directory.CreateDirectory(saveDir);
+                args.Append($" \"{saveDir}\"");
             }
 
             var psi = new ProcessStartInfo
@@ -328,7 +378,7 @@ public class PythonService : IDisposable
                 return false;
             }
 
-            Logger.Log($"Launched mlabelImg targeting: {imagesFolder}");
+            Logger.Log($"Launched mlabelImg: {psi.Arguments}");
 
             // Don't wait for it - let it run independently
             // Give it a moment to start

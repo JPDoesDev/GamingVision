@@ -199,7 +199,7 @@ def _recalculate_paths():
     # Derived paths
     IMAGES_DIR = TRAINING_DATA_DIR / "images"
     LABELS_DIR = TRAINING_DATA_DIR / "labels"
-    CLASSES_FILE = TRAINING_DATA_DIR / "classes.txt"
+    CLASSES_FILE = LABELS_DIR / "classes.txt"  # mlabelImg saves classes.txt in labels folder
     DATASET_YAML = TRAINING_DATA_DIR / "dataset.yaml"
 
     # Split dataset paths
@@ -224,7 +224,7 @@ BASE_MODEL = _DEFAULT_BASE_MODEL
 TRAINING_DATA_DIR = TRAINING_TOOL_DIR / "training_data" / GAME_ID
 IMAGES_DIR = TRAINING_DATA_DIR / "images"
 LABELS_DIR = TRAINING_DATA_DIR / "labels"
-CLASSES_FILE = TRAINING_DATA_DIR / "classes.txt"
+CLASSES_FILE = LABELS_DIR / "classes.txt"  # mlabelImg saves classes.txt in labels folder
 DATASET_YAML = TRAINING_DATA_DIR / "dataset.yaml"
 
 # Split dataset paths (created by split_dataset.py)

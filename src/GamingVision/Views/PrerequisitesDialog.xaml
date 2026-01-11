@@ -67,10 +67,11 @@
                        Margin="10,8"/>
             <Button Grid.Row="0" Grid.Column="2"
                     x:Name="PythonDownloadBtn"
-                    Content="Download"
+                    Content="Install Python 3.10"
                     Click="PythonDownload_Click"
-                    MinWidth="80"
-                    Margin="5,5"/>
+                    MinWidth="110"
+                    Margin="5,5"
+                    ToolTip="Downloads and installs Python 3.10 to C:\Python310"/>
 
             <!-- CUDA 13.0 -->
             <TextBlock Grid.Row="1" Grid.Column="0"
@@ -85,10 +86,11 @@
                        Margin="10,8"/>
             <Button Grid.Row="1" Grid.Column="2"
                     x:Name="CudaDownloadBtn"
-                    Content="Download"
+                    Content="Install CUDA 13.0"
                     Click="CudaDownload_Click"
-                    MinWidth="80"
-                    Margin="5,5"/>
+                    MinWidth="110"
+                    Margin="5,5"
+                    ToolTip="Downloads (~3GB) and installs CUDA 13.0 Toolkit"/>
 
             <!-- PyTorch -->
             <TextBlock Grid.Row="2" Grid.Column="0"

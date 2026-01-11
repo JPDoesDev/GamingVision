@@ -43,10 +43,10 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
     private int _baseLabeledCount;
 
     [ObservableProperty]
-    private bool _isFineTuneMode = true;
+    private bool _isFineTuneMode;
 
     [ObservableProperty]
-    private bool _isFullRetrainMode;
+    private bool _isFullRetrainMode = true;
 
     [ObservableProperty]
     private string _modeDescription = string.Empty;
@@ -331,7 +331,7 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var requiredPackages = new[] { "ultralytics", "mlabelImg", "pyyaml", "pillow" };
+        var requiredPackages = new[] { "ultralytics", "pyyaml", "pillow" };
         var missing = new List<string>();
 
         foreach (var package in requiredPackages)
@@ -341,6 +341,13 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
             {
                 missing.Add(package);
             }
+        }
+
+        // Check mlabelImg separately using executable detection
+        var mlabelImgInstalled = await _pythonService.IsMLabelImgInstalledAsync();
+        if (!mlabelImgInstalled)
+        {
+            missing.Add("mlabelImg");
         }
 
         if (missing.Count == 0)
@@ -529,9 +536,9 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
     {
         if (IsFineTuneMode)
         {
-            // Fine-tune needs new data and an existing model
-            var modelPath = Path.Combine(_configManager.GameModelsDirectory, _profile.GameId, "best.pt");
-            CanStartTraining = NewLabeledCount > 0 && File.Exists(modelPath);
+            // Fine-tune needs new data and an existing .pt model
+            var latestPt = GetLatestPtModel();
+            CanStartTraining = NewLabeledCount > 0 && latestPt != null;
         }
         else
         {
@@ -540,22 +547,77 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Finds the latest .pt model file in the GameModels directory for fine-tuning.
+    /// Returns null if no .pt file exists.
+    /// </summary>
+    private string? GetLatestPtModel()
+    {
+        var gameModelsDir = Path.Combine(_configManager.GameModelsDirectory, _profile.GameId);
+        if (!Directory.Exists(gameModelsDir))
+            return null;
+
+        // Find all .pt files and get the most recently modified one
+        var ptFiles = Directory.GetFiles(gameModelsDir, "*.pt")
+            .OrderByDescending(File.GetLastWriteTime)
+            .FirstOrDefault();
+
+        return ptFiles;
+    }
+
     [RelayCommand]
     private async Task LaunchMLabelImgAsync()
     {
         try
         {
-            // Determine which folder to open
-            var targetPath = IsFineTuneMode ? NewTrainingDataPath : BaseTrainingDataPath;
-            var imagesPath = Path.Combine(targetPath, "images");
-            var classesFile = Path.Combine(targetPath, "classes.txt");
+            // Determine which folder to open based on where images exist
+            string? targetPath = null;
+            string? imagesPath = null;
 
-            // Create directories if they don't exist
-            Directory.CreateDirectory(imagesPath);
+            // Priority 1: New training data has images
+            var newImagesPath = Path.Combine(NewTrainingDataPath, "images");
+            if (Directory.Exists(newImagesPath) && Directory.GetFiles(newImagesPath, "*.*").Length > 0)
+            {
+                targetPath = NewTrainingDataPath;
+                imagesPath = newImagesPath;
+            }
+            // Priority 2: Base training data has images
+            else
+            {
+                var baseImagesPath = Path.Combine(BaseTrainingDataPath, "images");
+                if (Directory.Exists(baseImagesPath) && Directory.GetFiles(baseImagesPath, "*.*").Length > 0)
+                {
+                    targetPath = BaseTrainingDataPath;
+                    imagesPath = baseImagesPath;
+                }
+            }
+            // Priority 3: No images anywhere - launch with no arguments
 
-            var success = await _pythonService.LaunchMLabelImgAsync(
-                imagesPath,
-                File.Exists(classesFile) ? classesFile : null);
+            // Find classes file in labels folder - check target folder first, then fall back to other folder
+            // mlabelImg saves classes.txt in the labels folder
+            string? classesFile = null;
+            if (targetPath != null)
+            {
+                var targetClassesFile = Path.Combine(targetPath, "labels", "classes.txt");
+                if (File.Exists(targetClassesFile))
+                {
+                    classesFile = targetClassesFile;
+                }
+            }
+
+            // Fallback: check both labels folders for classes.txt
+            if (classesFile == null)
+            {
+                var newClassesFile = Path.Combine(NewTrainingDataPath, "labels", "classes.txt");
+                var baseClassesFile = Path.Combine(BaseTrainingDataPath, "labels", "classes.txt");
+
+                if (File.Exists(newClassesFile))
+                    classesFile = newClassesFile;
+                else if (File.Exists(baseClassesFile))
+                    classesFile = baseClassesFile;
+            }
+
+            var success = await _pythonService.LaunchMLabelImgAsync(imagesPath, classesFile);
 
             if (!success)
             {
@@ -613,53 +675,66 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
         Directory.CreateDirectory(baseImagesDir);
         Directory.CreateDirectory(baseLabelsDir);
 
-        // Move images
+        // Move images and their corresponding labels together to keep them paired
         if (Directory.Exists(newImagesDir))
         {
-            foreach (var file in Directory.GetFiles(newImagesDir))
+            foreach (var imageFile in Directory.GetFiles(newImagesDir))
             {
-                var destFile = Path.Combine(baseImagesDir, Path.GetFileName(file));
-                if (!File.Exists(destFile))
+                var fileName = Path.GetFileName(imageFile);
+                var baseName = Path.GetFileNameWithoutExtension(imageFile);
+                var ext = Path.GetExtension(imageFile);
+                var destImageFile = Path.Combine(baseImagesDir, fileName);
+
+                // Check if we need a unique name
+                string finalBaseName = baseName;
+                if (File.Exists(destImageFile))
                 {
-                    File.Move(file, destFile);
-                    imagesMoved++;
+                    // Generate unique name for both image and label
+                    finalBaseName = $"{baseName}_{DateTime.Now:yyyyMMddHHmmss}";
+                    destImageFile = Path.Combine(baseImagesDir, $"{finalBaseName}{ext}");
                 }
-                else
+
+                // Move image
+                File.Move(imageFile, destImageFile);
+                imagesMoved++;
+
+                // Move corresponding label if it exists (using the same final name)
+                var labelFile = Path.Combine(newLabelsDir, $"{baseName}.txt");
+                if (File.Exists(labelFile))
                 {
-                    // File exists, generate unique name
-                    var baseName = Path.GetFileNameWithoutExtension(file);
-                    var ext = Path.GetExtension(file);
-                    var uniqueName = $"{baseName}_{DateTime.Now:yyyyMMddHHmmss}{ext}";
-                    File.Move(file, Path.Combine(baseImagesDir, uniqueName));
-                    imagesMoved++;
+                    var destLabelFile = Path.Combine(baseLabelsDir, $"{finalBaseName}.txt");
+                    File.Move(labelFile, destLabelFile);
+                    labelsMoved++;
                 }
             }
         }
 
-        // Move labels
+        // Move any orphaned labels (labels without matching images)
         if (Directory.Exists(newLabelsDir))
         {
-            foreach (var file in Directory.GetFiles(newLabelsDir, "*.txt"))
+            foreach (var labelFile in Directory.GetFiles(newLabelsDir, "*.txt"))
             {
-                var destFile = Path.Combine(baseLabelsDir, Path.GetFileName(file));
-                if (!File.Exists(destFile))
+                var fileName = Path.GetFileName(labelFile);
+                var destLabelFile = Path.Combine(baseLabelsDir, fileName);
+
+                if (!File.Exists(destLabelFile))
                 {
-                    File.Move(file, destFile);
+                    File.Move(labelFile, destLabelFile);
                     labelsMoved++;
                 }
                 else
                 {
-                    var baseName = Path.GetFileNameWithoutExtension(file);
+                    var baseName = Path.GetFileNameWithoutExtension(labelFile);
                     var uniqueName = $"{baseName}_{DateTime.Now:yyyyMMddHHmmss}.txt";
-                    File.Move(file, Path.Combine(baseLabelsDir, uniqueName));
+                    File.Move(labelFile, Path.Combine(baseLabelsDir, uniqueName));
                     labelsMoved++;
                 }
             }
         }
 
-        // Merge classes.txt
-        var newClassesFile = Path.Combine(newPath, "classes.txt");
-        var baseClassesFile = Path.Combine(basePath, "classes.txt");
+        // Merge classes.txt (located in labels folder)
+        var newClassesFile = Path.Combine(newLabelsDir, "classes.txt");
+        var baseClassesFile = Path.Combine(baseLabelsDir, "classes.txt");
 
         if (File.Exists(newClassesFile))
         {
@@ -773,6 +848,23 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Warn if Full Retrain but New folder has images that won't be used
+        if (IsFullRetrainMode && NewLabeledCount > 0)
+        {
+            var result = MessageBox.Show(
+                $"You have {NewLabeledCount} labeled images in the New Training Data folder.\n\n" +
+                "Full Retrain only uses images from the Base folder.\n" +
+                "These new images will NOT be included in training.\n\n" +
+                "To include them, click 'Merge New → Base' first.\n\n" +
+                "Continue with Full Retrain anyway?",
+                "New Images Won't Be Used",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+        }
+
         // Warn about CPU mode if GPU prerequisites aren't met
         if (!AllPrerequisitesMet)
         {
@@ -850,11 +942,11 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
         if (mode == TrainingMode.FineTune)
         {
             trainingDataPath = NewTrainingDataPath;
-            fineTuneModelPath = Path.Combine(gameModelsPath, "best.pt");
+            fineTuneModelPath = GetLatestPtModel();
 
-            if (!File.Exists(fineTuneModelPath))
+            if (fineTuneModelPath == null || !File.Exists(fineTuneModelPath))
             {
-                MessageBox.Show($"Fine-tune model not found:\n{fineTuneModelPath}\n\nPlease run a full training first.",
+                MessageBox.Show($"No .pt model found in:\n{gameModelsPath}\n\nPlease run a full training first.",
                     "Model Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }

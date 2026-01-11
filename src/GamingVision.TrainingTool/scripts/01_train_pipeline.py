@@ -389,7 +389,7 @@ def step_train() -> bool:
 # =============================================================================
 
 def step_export() -> bool:
-    """Export model to ONNX and deploy (both 640 and 1440 sizes)."""
+    """Export model to ONNX and deploy (both 640 and 1440 sizes), plus .pt for fine-tuning."""
     print_step(4, "EXPORT MODEL")
 
     # Find trained model
@@ -415,9 +415,12 @@ def step_export() -> bool:
     # Generate version stamp
     version = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    versioned_base = f"{config.MODEL_NAME}_v{version}"
+
     print(f"\nOutput files:")
+    print(f"  {config.GAME_MODELS_DIR / f'{versioned_base}.pt'} (for fine-tuning)")
     for size in export_sizes:
-        versioned_name = f"{config.MODEL_NAME}_v{version}_{size}"
+        versioned_name = f"{versioned_base}_{size}"
         print(f"  {config.GAME_MODELS_DIR / f'{versioned_name}.onnx'}")
         print(f"  {config.GAME_MODELS_DIR / f'{versioned_name}.txt'}")
 
@@ -428,7 +431,18 @@ def step_export() -> bool:
     try:
         from ultralytics import YOLO
 
+        # Ensure output directory exists
+        config.GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Copy .pt file for fine-tuning (versioned name)
+        target_pt = config.GAME_MODELS_DIR / f"{versioned_base}.pt"
+        shutil.copy2(weights_path, target_pt)
+        pt_size = target_pt.stat().st_size / (1024 * 1024)
+        print(f"\nCopied PyTorch model for fine-tuning:")
+        print(f"  {target_pt} ({pt_size:.1f} MB)")
+
         deployed_models = []
+        deployed_pt_name = f"{versioned_base}.pt"
 
         for imgsz in export_sizes:
             print()
@@ -452,10 +466,7 @@ def step_export() -> bool:
             export_path = Path(export_path)
             print(f"  Exported: {export_path}")
 
-            # Deploy to GameModels
-            config.GAME_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-            versioned_name = f"{config.MODEL_NAME}_v{version}_{imgsz}"
+            versioned_name = f"{versioned_base}_{imgsz}"
             target_onnx = config.GAME_MODELS_DIR / f"{versioned_name}.onnx"
             target_labels = config.GAME_MODELS_DIR / f"{versioned_name}.txt"
 
@@ -477,7 +488,7 @@ def step_export() -> bool:
 
             deployed_models.append((versioned_name, imgsz))
 
-        # Update game_config.json to use 640 (speed) model by default
+        # Update game_config.json with model and classes
         config_path = config.GAME_MODELS_DIR / "game_config.json"
         if config_path.exists():
             import json
@@ -493,11 +504,46 @@ def step_export() -> bool:
             old_model = game_cfg.get("modelFile", "")
             game_cfg["modelFile"] = f"{default_model}.onnx"
 
+            # Add classes from training to game_config
+            class_names = get_class_names()
+            existing_labels = {label.get("name") for label in game_cfg.get("labels", [])}
+            existing_primary = set(game_cfg.get("primaryLabels", []))
+            existing_secondary = set(game_cfg.get("secondaryLabels", []))
+            existing_tertiary = set(game_cfg.get("tertiaryLabels", []))
+            all_existing_tiers = existing_primary | existing_secondary | existing_tertiary
+
+            # Initialize arrays if they don't exist
+            if "labels" not in game_cfg:
+                game_cfg["labels"] = []
+            if "primaryLabels" not in game_cfg:
+                game_cfg["primaryLabels"] = []
+
+            # Add new classes
+            new_classes_added = []
+            for class_name in class_names:
+                # Add to labels array if not already there
+                if class_name not in existing_labels:
+                    game_cfg["labels"].append({
+                        "name": class_name,
+                        "description": ""
+                    })
+
+                # Add to primaryLabels if not in any tier
+                if class_name not in all_existing_tiers:
+                    game_cfg["primaryLabels"].append(class_name)
+                    new_classes_added.append(class_name)
+
             with open(config_path, 'w') as f:
                 json.dump(game_cfg, f, indent=2)
 
             print(f"\nUpdated game_config.json:")
             print(f"  modelFile: {old_model} -> {default_model}.onnx")
+            if new_classes_added:
+                print(f"  Added {len(new_classes_added)} new classes to primaryLabels:")
+                for cls in new_classes_added:
+                    print(f"    - {cls}")
+            else:
+                print(f"  Classes: All {len(class_names)} classes already configured")
         else:
             print_warning(f"game_config.json not found at {config_path}")
             print("You'll need to create this file manually.")
@@ -505,7 +551,8 @@ def step_export() -> bool:
         # Final summary
         print()
         print_success("Models exported successfully!")
-        print("\nExported models:")
+        print("\nExported files:")
+        print(f"  {deployed_pt_name} (PyTorch - for fine-tuning)")
         for name, size in deployed_models:
             mode = "(Speed - 30 FPS)" if size == 640 else "(Accuracy - higher detail)"
             print(f"  {name}.onnx {mode}")

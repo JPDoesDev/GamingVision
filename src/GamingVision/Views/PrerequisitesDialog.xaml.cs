@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Media;
+using GamingVision.Utilities;
 
 namespace GamingVision.Views;
 
@@ -9,8 +12,10 @@ namespace GamingVision.Views;
 /// </summary>
 public partial class PrerequisitesDialog : Window
 {
-    private const string PythonDownloadUrl = "https://www.python.org/downloads/release/python-3100/";
-    private const string CudaDownloadUrl = "https://developer.nvidia.com/cuda-13-0-0-download-archive";
+    private const string PythonInstallerUrl = "https://www.python.org/ftp/python/3.10.0/python-3.10.0-amd64.exe";
+    private const string PythonInstallerName = "python-3.10.0-amd64.exe";
+    private const string CudaInstallerUrl = "https://developer.download.nvidia.com/compute/cuda/13.0.0/local_installers/cuda_13.0.0_553.05_windows.exe";
+    private const string CudaInstallerName = "cuda_13.0.0_553.05_windows.exe";
 
     /// <summary>
     /// Gets whether the user chose to continue with CPU training.
@@ -76,14 +81,151 @@ public partial class PrerequisitesDialog : Window
         PackagesInstallBtn.Visibility = passed ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void PythonDownload_Click(object sender, RoutedEventArgs e)
+    private async void PythonDownload_Click(object sender, RoutedEventArgs e)
     {
-        OpenUrl(PythonDownloadUrl);
+        try
+        {
+            // Disable button during download/install
+            PythonDownloadBtn.IsEnabled = false;
+            PythonDownloadBtn.Content = "Downloading...";
+
+            var tempPath = Path.Combine(Path.GetTempPath(), PythonInstallerName);
+
+            // Download the installer
+            using (var client = new HttpClient())
+            {
+                client.Timeout = TimeSpan.FromMinutes(10);
+                var response = await client.GetAsync(PythonInstallerUrl);
+                response.EnsureSuccessStatusCode();
+
+                await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await response.Content.CopyToAsync(fs);
+            }
+
+            Logger.Log($"Python installer downloaded to: {tempPath}");
+            PythonDownloadBtn.Content = "Installing...";
+
+            // Run the installer with silent install parameters
+            var psi = new ProcessStartInfo
+            {
+                FileName = tempPath,
+                Arguments = "InstallAllUsers=1 PrependPath=1 Include_pip=1 TargetDir=C:\\Python310",
+                UseShellExecute = true,
+                Verb = "runas" // Request admin elevation
+            };
+
+            var process = Process.Start(psi);
+            if (process != null)
+            {
+                MessageBox.Show(
+                    "Python 3.10 installer has started.\n\n" +
+                    "Please wait for the installation to complete, then click 'Recheck Prerequisites' in the Training window.\n\n" +
+                    "Note: You may need to restart your computer for PATH changes to take effect.",
+                    "Installing Python 3.10",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to download/install Python: {ex.Message}");
+            MessageBox.Show(
+                $"Failed to download or install Python:\n{ex.Message}\n\n" +
+                "Please download manually from:\nhttps://www.python.org/downloads/release/python-3100/",
+                "Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            PythonDownloadBtn.IsEnabled = true;
+            PythonDownloadBtn.Content = "Install Python 3.10";
+        }
     }
 
-    private void CudaDownload_Click(object sender, RoutedEventArgs e)
+    private async void CudaDownload_Click(object sender, RoutedEventArgs e)
     {
-        OpenUrl(CudaDownloadUrl);
+        try
+        {
+            // Disable button during download/install
+            CudaDownloadBtn.IsEnabled = false;
+            CudaDownloadBtn.Content = "Downloading...";
+
+            var tempPath = Path.Combine(Path.GetTempPath(), CudaInstallerName);
+
+            // Download the installer (CUDA is ~3GB, so this will take a while)
+            using (var client = new HttpClient())
+            {
+                client.Timeout = TimeSpan.FromMinutes(60); // CUDA is large, allow more time
+
+                // Use streaming to handle large file
+                using var response = await client.GetAsync(CudaInstallerUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                var totalBytes = response.Content.Headers.ContentLength ?? 0;
+                var totalMB = totalBytes / (1024.0 * 1024.0);
+
+                await using var contentStream = await response.Content.ReadAsStreamAsync();
+                await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
+                var buffer = new byte[8192];
+                long totalRead = 0;
+                int bytesRead;
+
+                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await fs.WriteAsync(buffer, 0, bytesRead);
+                    totalRead += bytesRead;
+
+                    // Update progress every 10MB
+                    if (totalBytes > 0 && totalRead % (10 * 1024 * 1024) < 8192)
+                    {
+                        var percent = (int)((totalRead * 100) / totalBytes);
+                        CudaDownloadBtn.Content = $"Downloading... {percent}%";
+                    }
+                }
+            }
+
+            Logger.Log($"CUDA installer downloaded to: {tempPath}");
+            CudaDownloadBtn.Content = "Installing...";
+
+            // Run the installer with silent install parameters
+            var psi = new ProcessStartInfo
+            {
+                FileName = tempPath,
+                Arguments = "-s", // Silent install
+                UseShellExecute = true,
+                Verb = "runas" // Request admin elevation
+            };
+
+            var process = Process.Start(psi);
+            if (process != null)
+            {
+                MessageBox.Show(
+                    "CUDA 13.0 installer has started (silent install).\n\n" +
+                    "This may take several minutes. Please wait for the installation to complete, " +
+                    "then click 'Recheck Prerequisites' in the Training window.\n\n" +
+                    "Note: You may need to restart your computer after installation.",
+                    "Installing CUDA 13.0",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to download/install CUDA: {ex.Message}");
+            MessageBox.Show(
+                $"Failed to download or install CUDA:\n{ex.Message}\n\n" +
+                "Please download manually from:\nhttps://developer.nvidia.com/cuda-13-0-0-download-archive",
+                "Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            CudaDownloadBtn.IsEnabled = true;
+            CudaDownloadBtn.Content = "Install CUDA 13.0";
+        }
     }
 
     private void PytorchInstall_Click(object sender, RoutedEventArgs e)
@@ -145,22 +287,5 @@ public partial class PrerequisitesDialog : Window
         ContinueWithCpu = false;
         DialogResult = false;
         Close();
-    }
-
-    private static void OpenUrl(string url)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            MessageBox.Show($"Failed to open browser. Please visit:\n{url}",
-                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
     }
 }

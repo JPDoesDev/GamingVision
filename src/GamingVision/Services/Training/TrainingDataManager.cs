@@ -19,7 +19,7 @@ public class TrainingDataManager
     public string GameId => _gameId;
     public string ImagesPath => Path.Combine(_trainingDataRoot, _gameId, "images");
     public string LabelsPath => Path.Combine(_trainingDataRoot, _gameId, "labels");
-    public string ClassesFile => Path.Combine(_trainingDataRoot, _gameId, "classes.txt");
+    public string ClassesFile => Path.Combine(LabelsPath, "classes.txt");  // mlabelImg saves classes.txt in labels folder
 
     public TrainingDataManager(string trainingDataRoot, string gameId)
     {
@@ -199,10 +199,10 @@ public class TrainingDataManager
     }
 
     /// <summary>
-    /// Gets the default training data root path.
+    /// Gets the default training data root path for new captures.
     /// </summary>
     public static string GetDefaultTrainingDataRoot()
     {
-        return @"C:\GamingVision\Training_Data";
+        return @"C:\GamingVision\New_Training_Data";
     }
 }

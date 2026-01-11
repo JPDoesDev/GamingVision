@@ -1,0 +1,77 @@
+{
+  "configVersion": "0.2.3",
+  "gameId": "borderlands_1_enhanced",
+  "displayName": "Borderlands 1 Enhanced",
+  "modelFile": "borderlands_1_enhanced_model_v20260110_222218_640.onnx",
+  "windowTitle": "",
+  "primaryLabels": [],
+  "secondaryLabels": [],
+  "tertiaryLabels": [],
+  "labelPriority": [],
+  "labels": [],
+  "hotkeys": {
+    "readPrimary": "Alt+1",
+    "readSecondary": "Alt+2",
+    "readTertiary": "Alt+3",
+    "stopReading": "Alt+4",
+    "toggleDetection": "Alt+5",
+    "quit": "Alt+Q"
+  },
+  "capture": {
+    "method": "fullscreen",
+    "monitorIndex": 0,
+    "captureCursor": false,
+    "scaleFactor": 1,
+    "regionOfInterest": ""
+  },
+  "tts": {
+    "engine": "sapi",
+    "primaryVoice": "Microsoft David",
+    "primaryRate": 3,
+    "secondaryVoice": "Microsoft David",
+    "secondaryRate": 0,
+    "tertiaryVoice": "Microsoft David",
+    "tertiaryRate": 0,
+    "primaryDirectionalAudio": false,
+    "secondaryDirectionalAudio": false,
+    "tertiaryDirectionalAudio": false,
+    "volume": 100
+  },
+  "detection": {
+    "autoReadCooldown": 2000,
+    "confidenceThreshold": 0.3,
+    "autoReadConfidenceThreshold": 0.6,
+    "nmsThreshold": 0.45,
+    "maxDetections": 100,
+    "targetFps": 10,
+    "autoReadEnabled": false,
+    "onlyReadChanges": true,
+    "readPrimaryLabelAloud": true,
+    "readSecondaryLabelAloud": false,
+    "readTertiaryLabelAloud": false
+  },
+  "overlay": {
+    "enabled": false,
+    "confidenceThreshold": 0.5,
+    "toggleHotkey": "Alt+O",
+    "groups": []
+  },
+  "training": {
+    "enabled": true,
+    "dataPath": "C:\\GamingVision\\New_Training_Data\\borderlands_1",
+    "trainingRootPath": "C:\\GamingVision",
+    "captureHotkey": "F1",
+    "annotationConfidenceThreshold": 0.1,
+    "trainingParameters": {
+      "epochs": 150,
+      "imageSize": 1440,
+      "batch": 0.7,
+      "patience": 50,
+      "learningRate": 0.01,
+      "device": "cuda",
+      "workers": 8,
+      "cacheImages": true,
+      "useMixedPrecision": true
+    }
+  }
+}

@@ -2333,11 +2333,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _trainingDataManager = new TrainingDataManager(trainingRoot, string.IsNullOrEmpty(gameFolder) ? profile.GameId : gameFolder);
         _trainingDataManager.Initialize();
 
-        // Save classes.txt if model is loaded
+        // Save classes.txt to labels folder if model is loaded
         if (_detectionManager?.DetectionService != null && _detectionManager.DetectionService.Labels.Count > 0)
         {
             _trainingDataManager.SaveClasses(_detectionManager.DetectionService.Labels);
         }
+        // Note: mlabelImg creates classes.txt in labels folder when annotating
 
         Logger.Log($"Training data manager initialized: {_trainingDataManager.ImagesPath}");
     }

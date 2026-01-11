@@ -2,8 +2,8 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "ArcRaidersModel_v20260103_210918_640.onnx",
-  "windowTitle": "\uFEFF\u200BA\u200BR\uFEFF\u200B\u200B\u200B\uFEFFC\u200B\u200B\u2005\u200B\u200B\u200B\u200BRa\u200Bi\u200B\u200B\u200B\uFEFFder\uFEFFs",
+  "modelFile": "arc_raiders_model_v20260110_210957_640.onnx",
+  "windowTitle": "\ufeff\u200bA\u200bR\ufeff\u200b\u200b\u200b\ufeffC\u200b\u200b\u2005\u200b\u200b\u200b\u200bRa\u200bi\u200b\u200b\u200b\ufeffder\ufeffs",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -98,12 +98,12 @@
     }
   ],
   "hotkeys": {
-    "readPrimary": "Alt\u002B1",
-    "readSecondary": "Alt\u002B2",
-    "readTertiary": "Alt\u002B3",
-    "stopReading": "Alt\u002B4",
-    "toggleDetection": "Alt\u002B5",
-    "quit": "Alt\u002BQ"
+    "readPrimary": "Alt+1",
+    "readSecondary": "Alt+2",
+    "readTertiary": "Alt+3",
+    "stopReading": "Alt+4",
+    "toggleDetection": "Alt+5",
+    "quit": "Alt+Q"
   },
   "capture": {
     "method": "fullscreen",
@@ -141,7 +141,7 @@
   "overlay": {
     "enabled": true,
     "confidenceThreshold": 0.35,
-    "toggleHotkey": "Alt\u002BO",
+    "toggleHotkey": "Alt+O",
     "groups": [
       {
         "name": "Waypoint",
@@ -171,8 +171,20 @@
   "training": {
     "enabled": true,
     "dataPath": "C:\\GamingVision_Training_Data\\Arc_Raiders",
+    "trainingRootPath": "C:\\GamingVision",
     "captureHotkey": "F1",
-    "annotationConfidenceThreshold": 0.2
+    "annotationConfidenceThreshold": 0.2,
+    "trainingParameters": {
+      "epochs": 150,
+      "imageSize": 1440,
+      "batch": 0.85,
+      "patience": 50,
+      "learningRate": 0.01,
+      "device": "cuda",
+      "workers": 9,
+      "cacheImages": true,
+      "useMixedPrecision": true
+    }
   },
   "waypoint": {
     "enabled": true,

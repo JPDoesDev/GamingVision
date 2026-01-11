@@ -56,17 +56,9 @@
     <Resource Include="Resources\app.ico" />
   </ItemGroup>
 
-  <!-- Include GameModels folder with per-game ONNX models and config files -->
+  <!-- Include entire GameModels folder (models, configs, .pt files for fine-tuning, etc.) -->
   <ItemGroup>
-    <Content Include="..\..\GameModels\**\*.onnx">
-      <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\GameModels\**\*.json">
-      <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\GameModels\**\*.txt">
+    <Content Include="..\..\GameModels\**\*.*">
       <Link>GameModels\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

@@ -93,16 +93,16 @@
         <!-- Training Mode -->
         <GroupBox Grid.Row="1" Header="Training Mode" Margin="0,10,0,0">
             <StackPanel>
-                <RadioButton Content="Fine-tune (train on new data only, uses existing model)"
-                             IsChecked="{Binding IsFineTuneMode}"
-                             Margin="0,5"
-                             IsEnabled="{Binding CanSelectMode}"
-                             AutomationProperties.Name="Fine-tune Mode"/>
                 <RadioButton Content="Full Retrain (train from scratch on all data)"
                              IsChecked="{Binding IsFullRetrainMode}"
                              Margin="0,5"
                              IsEnabled="{Binding CanSelectMode}"
                              AutomationProperties.Name="Full Retrain Mode"/>
+                <RadioButton Content="Fine-tune (train on new data only, uses existing model)"
+                             IsChecked="{Binding IsFineTuneMode}"
+                             Margin="0,5"
+                             IsEnabled="{Binding CanSelectMode}"
+                             AutomationProperties.Name="Fine-tune Mode"/>
 
                 <Border Background="{DynamicResource SurfaceBrush}"
                         CornerRadius="4"
