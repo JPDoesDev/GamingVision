@@ -14,8 +14,7 @@ public partial class PrerequisitesDialog : Window
 {
     private const string PythonInstallerUrl = "https://www.python.org/ftp/python/3.10.0/python-3.10.0-amd64.exe";
     private const string PythonInstallerName = "python-3.10.0-amd64.exe";
-    private const string CudaInstallerUrl = "https://developer.download.nvidia.com/compute/cuda/13.0.0/local_installers/cuda_13.0.0_553.05_windows.exe";
-    private const string CudaInstallerName = "cuda_13.0.0_553.05_windows.exe";
+    private const string CudaDownloadPageUrl = "https://developer.nvidia.com/cuda-13-0-0-download-archive";
 
     /// <summary>
     /// Gets whether the user chose to continue with CPU training.
@@ -143,88 +142,32 @@ public partial class PrerequisitesDialog : Window
         }
     }
 
-    private async void CudaDownload_Click(object sender, RoutedEventArgs e)
+    private void CudaDownload_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            // Disable button during download/install
-            CudaDownloadBtn.IsEnabled = false;
-            CudaDownloadBtn.Content = "Downloading...";
-
-            var tempPath = Path.Combine(Path.GetTempPath(), CudaInstallerName);
-
-            // Download the installer (CUDA is ~3GB, so this will take a while)
-            using (var client = new HttpClient())
+            Process.Start(new ProcessStartInfo
             {
-                client.Timeout = TimeSpan.FromMinutes(60); // CUDA is large, allow more time
+                FileName = CudaDownloadPageUrl,
+                UseShellExecute = true
+            });
 
-                // Use streaming to handle large file
-                using var response = await client.GetAsync(CudaInstallerUrl, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-
-                var totalBytes = response.Content.Headers.ContentLength ?? 0;
-                var totalMB = totalBytes / (1024.0 * 1024.0);
-
-                await using var contentStream = await response.Content.ReadAsStreamAsync();
-                await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-
-                var buffer = new byte[8192];
-                long totalRead = 0;
-                int bytesRead;
-
-                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                {
-                    await fs.WriteAsync(buffer, 0, bytesRead);
-                    totalRead += bytesRead;
-
-                    // Update progress every 10MB
-                    if (totalBytes > 0 && totalRead % (10 * 1024 * 1024) < 8192)
-                    {
-                        var percent = (int)((totalRead * 100) / totalBytes);
-                        CudaDownloadBtn.Content = $"Downloading... {percent}%";
-                    }
-                }
-            }
-
-            Logger.Log($"CUDA installer downloaded to: {tempPath}");
-            CudaDownloadBtn.Content = "Installing...";
-
-            // Run the installer with silent install parameters
-            var psi = new ProcessStartInfo
-            {
-                FileName = tempPath,
-                Arguments = "-s", // Silent install
-                UseShellExecute = true,
-                Verb = "runas" // Request admin elevation
-            };
-
-            var process = Process.Start(psi);
-            if (process != null)
-            {
-                MessageBox.Show(
-                    "CUDA 13.0 installer has started (silent install).\n\n" +
-                    "This may take several minutes. Please wait for the installation to complete, " +
-                    "then click 'Recheck Prerequisites' in the Training window.\n\n" +
-                    "Note: You may need to restart your computer after installation.",
-                    "Installing CUDA 13.0",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-            }
+            MessageBox.Show(
+                "Opening NVIDIA CUDA download page in your browser.\n\n" +
+                "Download and install CUDA 13.0, then click 'Recheck Prerequisites' in the Training window.\n\n" +
+                "Note: You may need to restart your computer after installation.",
+                "Download CUDA 13.0",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            Logger.Error($"Failed to download/install CUDA: {ex.Message}");
+            Logger.Error($"Failed to open CUDA download page: {ex.Message}");
             MessageBox.Show(
-                $"Failed to download or install CUDA:\n{ex.Message}\n\n" +
-                "Please download manually from:\nhttps://developer.nvidia.com/cuda-13-0-0-download-archive",
+                $"Failed to open browser.\n\nPlease visit:\n{CudaDownloadPageUrl}",
                 "Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
-        }
-        finally
-        {
-            CudaDownloadBtn.IsEnabled = true;
-            CudaDownloadBtn.Content = "Install CUDA 13.0";
         }
     }
 

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj": {}
+    "D:\\dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj": {}
   },
   "projects": {
-    "D:\\Dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj": {
+    "D:\\dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj": {
       "version": "0.2.7",
       "restore": {
-        "projectUniqueName": "D:\\Dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj",
+        "projectUniqueName": "D:\\dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj",
         "projectName": "GamingVision",
-        "projectPath": "D:\\Dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj",
+        "projectPath": "D:\\dev\\GamingVision\\src\\GamingVision\\GamingVision.csproj",
         "packagesPath": "C:\\Users\\johnp\\.nuget\\packages\\",
-        "outputPath": "D:\\Dev\\GamingVision\\src\\GamingVision\\obj\\",
+        "outputPath": "D:\\dev\\GamingVision\\src\\GamingVision\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
