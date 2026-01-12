@@ -170,7 +170,7 @@
   },
   "training": {
     "enabled": true,
-    "dataPath": "C:\\GamingVision\\New_Training_Data\\arc_raiders\\images",
+    "dataPath": "C:\\GamingVision\\New_Training_Data\\arc_raiders",
     "trainingRootPath": "C:\\GamingVision",
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.2,

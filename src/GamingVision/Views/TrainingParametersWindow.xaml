@@ -5,12 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Training Parameters"
-        Height="662"
+        SizeToContent="Height"
         Width="420"
-        MinHeight="621"
         MinWidth="380"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
         AutomationProperties.Name="Training Parameters Window">
 

@@ -515,6 +515,29 @@
                 <Setter Property="Padding" Value="8,4"/>
                 <Setter Property="FontSize" Value="{StaticResource BaseFontSize}"/>
             </Style>
+
+            <!-- Default Menu Style -->
+            <Style TargetType="Menu">
+                <Setter Property="Background" Value="{StaticResource BackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+                <Setter Property="FontSize" Value="{StaticResource BaseFontSize}"/>
+            </Style>
+
+            <!-- Default MenuItem Style -->
+            <Style TargetType="MenuItem">
+                <Setter Property="Background" Value="{StaticResource BackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+                <Setter Property="FontSize" Value="{StaticResource BaseFontSize}"/>
+                <Setter Property="Padding" Value="8,4"/>
+                <Style.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True">
+                        <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}"/>
+                    </Trigger>
+                    <Trigger Property="IsSubmenuOpen" Value="True">
+                        <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

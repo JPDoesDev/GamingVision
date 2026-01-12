@@ -5,10 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Training Prerequisites"
-        Height="475"
+        SizeToContent="Height"
         Width="500"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
         AutomationProperties.Name="Training Prerequisites Dialog">
 

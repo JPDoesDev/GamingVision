@@ -8,9 +8,8 @@
         mc:Ignorable="d"
         Title="GamingVision - Accessibility Tool for Gamers"
         Icon="Resources/app.ico"
-        Height="1139"
+        SizeToContent="Height"
         Width="650"
-        MinHeight="1063"
         MinWidth="600"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResizeWithGrip"
@@ -241,8 +240,8 @@
                 </Grid>
             </TabItem>
 
-            <!-- Training Tab -->
-            <TabItem Header="Training">
+            <!-- Capture Tab -->
+            <TabItem Header="Capture">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

@@ -2,10 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Post Processing"
-        Width="450"
-        Height="250"
-        MinWidth="400"
-        MinHeight="220"
+        SizeToContent="Height"
+        Width="550"
+        MinWidth="500"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
@@ -15,6 +14,8 @@
     </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -29,8 +30,51 @@
                    TextWrapping="Wrap"
                    Margin="0,0,0,15"/>
 
+        <!-- Model Selection -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Use Model From:"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+            <ComboBox Grid.Column="1"
+                      ItemsSource="{Binding Games}"
+                      SelectedItem="{Binding PostProcessModelGame}"
+                      DisplayMemberPath="DisplayName"
+                      AutomationProperties.Name="Select Model Game"
+                      AutomationProperties.HelpText="Select which game's model to use for detection"/>
+        </Grid>
+
+        <!-- Data Directory -->
+        <Grid Grid.Row="2" Margin="0,0,0,15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Data Directory:"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+            <TextBox Grid.Column="1"
+                     Text="{Binding PostProcessDataPath, Mode=OneWay}"
+                     IsReadOnly="True"
+                     VerticalAlignment="Center"
+                     AutomationProperties.Name="Training Data Folder Path"
+                     AutomationProperties.HelpText="The folder containing images to process"/>
+            <Button Grid.Column="2"
+                    Content="Browse..."
+                    Command="{Binding BrowsePostProcessFolderCommand}"
+                    Margin="10,0,0,0"
+                    MinWidth="80"
+                    AutomationProperties.Name="Browse for Data Folder"/>
+        </Grid>
+
         <!-- Confidence Threshold Slider -->
-        <Grid Grid.Row="1" Margin="0,0,0,15">
+        <Grid Grid.Row="3" Margin="0,0,0,15">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -57,7 +101,7 @@
         </Grid>
 
         <!-- Process Button and Status -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Content="START PROCESSING"
                     Command="{Binding PostProcessTrainingImagesCommand}"
                     FontWeight="Bold"
@@ -80,7 +124,7 @@
         </StackPanel>
 
         <!-- Status -->
-        <TextBlock Grid.Row="3"
+        <TextBlock Grid.Row="5"
                    Text="{Binding PostProcessStatus}"
                    VerticalAlignment="Top"
                    HorizontalAlignment="Center"
@@ -89,7 +133,7 @@
                    Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
         <!-- Close Button -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Close" Click="Close_Click" MinWidth="100" IsCancel="True"/>
         </StackPanel>
     </Grid>

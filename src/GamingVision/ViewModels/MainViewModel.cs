@@ -98,6 +98,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private float _annotationConfidenceThreshold = 0.1f;
 
     [ObservableProperty]
+    private GameProfileItem? _postProcessModelGame;
+
+    [ObservableProperty]
+    private string _postProcessDataPath = string.Empty;
+
+    [ObservableProperty]
     private string _detectionStatus = "Stopped";
 
     [ObservableProperty]
@@ -1599,10 +1605,32 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void OpenPostProcessing()
     {
+        // Set default model game to current selection
+        PostProcessModelGame = SelectedGame;
+
+        // Set default data path to current game's training data path
+        PostProcessDataPath = TrainingDataPath;
+
         var postProcessingWindow = new Windows.PostProcessingWindow();
         postProcessingWindow.DataContext = this;
         postProcessingWindow.Owner = System.Windows.Application.Current.MainWindow;
         postProcessingWindow.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void BrowsePostProcessFolder()
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Select Training Data Folder to Process",
+            ShowNewFolderButton = false,
+            SelectedPath = string.IsNullOrEmpty(PostProcessDataPath) ? TrainingDataPath : PostProcessDataPath
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            PostProcessDataPath = dialog.SelectedPath;
+        }
     }
 
     #region Screen Reader Enable/Disable
@@ -2459,38 +2487,51 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task PostProcessTrainingImagesAsync()
     {
+        // Get current game profile for training data location
         var profile = GetSelectedGameProfile();
         if (profile == null)
         {
-            TrainingStatus = "No game selected";
+            PostProcessStatus = "No game selected";
             System.Media.SystemSounds.Beep.Play();
             return;
         }
 
-        if (string.IsNullOrEmpty(profile.ModelFile))
+        // Get model from selected model game (may be different from current game)
+        var modelGameKey = PostProcessModelGame?.Key ?? profile.GameId;
+        var modelProfile = _configManager.GetGameProfile(modelGameKey);
+        if (modelProfile == null)
         {
-            TrainingStatus = "No model configured for this game";
+            PostProcessStatus = "Model game profile not found";
             System.Media.SystemSounds.Beep.Play();
             return;
         }
 
-        // Get model path
-        var modelPath = _configManager.GetModelPath(profile.GameId, profile.ModelFile);
+        if (string.IsNullOrEmpty(modelProfile.ModelFile))
+        {
+            PostProcessStatus = $"No model configured for {modelProfile.DisplayName}";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
+
+        // Get model path from the selected model game
+        var modelPath = _configManager.GetModelPath(modelProfile.GameId, modelProfile.ModelFile);
         if (!File.Exists(modelPath))
         {
-            TrainingStatus = $"Model not found: {profile.ModelFile}";
+            PostProcessStatus = $"Model not found: {modelProfile.ModelFile}";
             System.Media.SystemSounds.Beep.Play();
             return;
         }
 
-        // Get training data folder (same logic as InitializeTrainingDataManager)
-        var trainingRoot = string.IsNullOrEmpty(profile.Training?.DataPath)
-            ? TrainingDataManager.GetDefaultTrainingDataRoot()
-            : Path.GetDirectoryName(profile.Training.DataPath) ?? TrainingDataManager.GetDefaultTrainingDataRoot();
+        // Get training data folder from PostProcessDataPath (set in Post Processing window)
+        if (string.IsNullOrEmpty(PostProcessDataPath) || !Directory.Exists(PostProcessDataPath))
+        {
+            PostProcessStatus = "Data directory not set or doesn't exist";
+            System.Media.SystemSounds.Beep.Play();
+            return;
+        }
 
-        var gameFolder = string.IsNullOrEmpty(profile.Training?.DataPath)
-            ? profile.GameId
-            : Path.GetFileName(profile.Training.DataPath);
+        var trainingRoot = Path.GetDirectoryName(PostProcessDataPath) ?? PostProcessDataPath;
+        var gameFolder = Path.GetFileName(PostProcessDataPath);
 
         var trainingDataManager = new TrainingDataManager(trainingRoot, string.IsNullOrEmpty(gameFolder) ? profile.GameId : gameFolder);
         trainingDataManager.Initialize();
@@ -2499,13 +2540,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var imageFiles = trainingDataManager.GetImageFiles();
         if (imageFiles.Length == 0)
         {
-            TrainingStatus = "No images found to process";
+            PostProcessStatus = "No images found to process";
             System.Media.SystemSounds.Beep.Play();
             return;
         }
 
         IsPostProcessing = true;
-        PostProcessStatus = "Loading model...";
+        var modelName = modelProfile.DisplayName;
+        PostProcessStatus = $"Loading model from {modelName}...";
 
         try
         {
@@ -2514,7 +2556,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var initialized = await detectionService.InitializeAsync(modelPath, _appConfig.UseDirectML);
             if (!initialized)
             {
-                TrainingStatus = "Failed to load model for post-processing";
+                PostProcessStatus = "Failed to load model for post-processing";
                 System.Media.SystemSounds.Beep.Play();
                 return;
             }

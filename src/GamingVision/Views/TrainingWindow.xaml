@@ -6,12 +6,11 @@
         xmlns:local="clr-namespace:GamingVision.Views"
         mc:Ignorable="d"
         Title="Training Workflow"
-        Height="867"
+        SizeToContent="Height"
         Width="650"
-        MinHeight="799"
         MinWidth="600"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}"
         AutomationProperties.Name="Training Workflow Window">
 
