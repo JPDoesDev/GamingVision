@@ -1581,6 +1581,30 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    private void Close()
+    {
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    [RelayCommand]
+    private void OpenOverlaySettings()
+    {
+        var overlaySettingsWindow = new Windows.OverlaySettingsWindow();
+        overlaySettingsWindow.DataContext = this;
+        overlaySettingsWindow.Owner = System.Windows.Application.Current.MainWindow;
+        overlaySettingsWindow.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void OpenPostProcessing()
+    {
+        var postProcessingWindow = new Windows.PostProcessingWindow();
+        postProcessingWindow.DataContext = this;
+        postProcessingWindow.Owner = System.Windows.Application.Current.MainWindow;
+        postProcessingWindow.ShowDialog();
+    }
+
     #region Screen Reader Enable/Disable
 
     private async Task EnableScreenReaderAsync()

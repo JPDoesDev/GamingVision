@@ -1,0 +1,77 @@
+<Window x:Class="GamingVision.Windows.OverlaySettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:GamingVision.Converters"
+        Title="Overlay Settings"
+        Width="500"
+        Height="600"
+        MinWidth="400"
+        MinHeight="450"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Overlay Settings Window">
+    <Window.Resources>
+        <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter"/>
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Overlay Groups -->
+        <GroupBox Header="Overlay Groups" Grid.Row="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <ListBox x:Name="GroupsListBox"
+                         ItemsSource="{Binding OverlayGroups}"
+                         SelectedItem="{Binding SelectedOverlayGroup}"
+                         Grid.Row="0"
+                         Margin="0,0,0,10">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- Color indicator -->
+                                <Rectangle Width="16" Height="16"
+                                           Fill="{Binding Color, Converter={StaticResource ColorStringToBrushConverter}}"
+                                           Stroke="White"
+                                           StrokeThickness="1"/>
+                                <!-- Group name -->
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Name}"
+                                           Margin="10,0,0,0"
+                                           VerticalAlignment="Center"/>
+                                <!-- Label count -->
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Labels.Count, StringFormat=({0} labels)}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="Add" Command="{Binding AddGroupCommand}" MinWidth="80"/>
+                    <Button Content="Edit" Command="{Binding EditGroupCommand}" MinWidth="80"/>
+                    <Button Content="Remove" Command="{Binding RemoveGroupCommand}" MinWidth="80"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Close Button -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content="Close" Click="Close_Click" MinWidth="100" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

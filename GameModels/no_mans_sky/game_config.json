@@ -109,7 +109,8 @@
   },
   "training": {
     "enabled": true,
-    "dataPath": "C:\\GamingVision_Training_Data\\No_Mans_Sky",
+    "dataPath": "C:\\GamingVision\\New_Training_Data\\No_Mans_Sky",
+    "trainingRootPath": "C:\\GamingVision",
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.1
   }

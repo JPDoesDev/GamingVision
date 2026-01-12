@@ -1,0 +1,96 @@
+<Window x:Class="GamingVision.Windows.PostProcessingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Post Processing"
+        Width="450"
+        Height="250"
+        MinWidth="400"
+        MinHeight="220"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource BackgroundBrush}"
+        AutomationProperties.Name="Post Processing Window">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Description -->
+        <TextBlock Grid.Row="0"
+                   Text="Run detection on all captured training images using the selected model. Annotations will be generated for each image based on the confidence threshold."
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,15"/>
+
+        <!-- Confidence Threshold Slider -->
+        <Grid Grid.Row="1" Margin="0,0,0,15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="50"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="Confidence Threshold:"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+            <Slider Grid.Column="1"
+                    Minimum="0.05"
+                    Maximum="0.95"
+                    Value="{Binding AnnotationConfidenceThreshold}"
+                    TickFrequency="0.05"
+                    IsSnapToTickEnabled="True"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Annotation Confidence Threshold"
+                    AutomationProperties.HelpText="Minimum confidence level for detections to be saved as annotations"/>
+            <TextBlock Grid.Column="2"
+                       Text="{Binding AnnotationConfidenceThreshold, StringFormat={}{0:P0}}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Right"
+                       MinWidth="40"/>
+        </Grid>
+
+        <!-- Process Button and Status -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Content="START PROCESSING"
+                    Command="{Binding PostProcessTrainingImagesCommand}"
+                    FontWeight="Bold"
+                    MinWidth="150"
+                    AutomationProperties.Name="Post Process Training Images"
+                    AutomationProperties.HelpText="Run YOLO detection on all training images and regenerate annotations">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsPostProcessing}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </StackPanel>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="3"
+                   Text="{Binding PostProcessStatus}"
+                   VerticalAlignment="Top"
+                   HorizontalAlignment="Center"
+                   Margin="0,15,0,0"
+                   Foreground="{DynamicResource SecondaryTextBrush}"
+                   Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+        <!-- Close Button -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Close" Click="Close_Click" MinWidth="100" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

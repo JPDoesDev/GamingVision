@@ -26,66 +26,70 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
     </Window.Resources>
 
-    <Grid Margin="20">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <DockPanel>
+        <!-- Menu Bar -->
+        <Menu DockPanel.Dock="Top" Background="{DynamicResource BackgroundBrush}">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Close" Command="{Binding CloseCommand}" InputGestureText="Alt+F4"/>
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_App Settings" Command="{Binding OpenAppSettingsCommand}"/>
+                <MenuItem Header="_Game Settings" Command="{Binding OpenGameSettingsCommand}"/>
+                <MenuItem Header="_Overlay Settings" Command="{Binding OpenOverlaySettingsCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Operations">
+                <MenuItem Header="_Post Processing" Command="{Binding OpenPostProcessingCommand}"/>
+                <MenuItem Header="_Train Model" Command="{Binding OpenTrainingWindowCommand}"/>
+            </MenuItem>
+        </Menu>
 
-        <!-- Game Selection and Engine Control (shared across tabs) -->
-        <GroupBox Grid.Row="0" Header="Select Game">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                <ComboBox x:Name="GameComboBox"
-                          Grid.Row="0" Grid.Column="0"
-                          ItemsSource="{Binding Games}"
-                          SelectedItem="{Binding SelectedGame}"
-                          DisplayMemberPath="DisplayName"
-                          AutomationProperties.Name="Game Selection"
-                          AutomationProperties.HelpText="Select the game you want to play with accessibility features"/>
+            <!-- Game Selection and Engine Control (shared across tabs) -->
+            <GroupBox Grid.Row="0" Header="Select Game">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                <Button Grid.Row="0" Grid.Column="1"
-                        Content="GAME SETTINGS"
-                        Command="{Binding OpenGameSettingsCommand}"
-                        Margin="10,0,0,0"
-                        AutomationProperties.Name="Open Game Settings"/>
+                    <ComboBox x:Name="GameComboBox"
+                              Grid.Row="0"
+                              ItemsSource="{Binding Games}"
+                              SelectedItem="{Binding SelectedGame}"
+                              DisplayMemberPath="DisplayName"
+                              AutomationProperties.Name="Game Selection"
+                              AutomationProperties.HelpText="Select the game you want to play with accessibility features"/>
 
-                <Button Grid.Row="1" Grid.ColumnSpan="2"
-                        Command="{Binding ToggleEngineCommand}"
-                        HorizontalAlignment="Center"
-                        Margin="0,10,0,0"
-                        FontWeight="Bold"
-                        AutomationProperties.Name="Toggle Engine">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                            <Setter Property="Content" Value="START ENGINE"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
-                                    <Setter Property="Content" Value="STOP ENGINE"/>
-                                    <Setter Property="Background" Value="{StaticResource StopButtonBrush}"/>
-                                </DataTrigger>
-                                <MultiDataTrigger>
-                                    <MultiDataTrigger.Conditions>
-                                        <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
-                                        <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
-                                    </MultiDataTrigger.Conditions>
-                                    <Setter Property="Background" Value="{StaticResource StopButtonHoverBrush}"/>
-                                </MultiDataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </Grid>
-        </GroupBox>
+                    <Button Grid.Row="0"
+                            Command="{Binding ToggleEngineCommand}"
+                            HorizontalAlignment="Right"
+                            FontWeight="Bold"
+                            AutomationProperties.Name="Toggle Engine">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="Content" Value="START ENGINE"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
+                                        <Setter Property="Content" Value="STOP ENGINE"/>
+                                        <Setter Property="Background" Value="{StaticResource StopButtonBrush}"/>
+                                    </DataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsEngineRunning}" Value="True"/>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Background" Value="{StaticResource StopButtonHoverBrush}"/>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </GroupBox>
 
         <!-- Tab Control -->
         <TabControl Grid.Row="1" Margin="0,10,0,10">
@@ -197,9 +201,6 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- Enable Overlay Checkbox -->
@@ -216,7 +217,7 @@
                     </StackPanel>
 
                     <!-- Overlay Settings -->
-                    <GroupBox Header="Overlay Settings" Grid.Row="1">
+                    <GroupBox Header="Hotkeys" Grid.Row="1">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -237,106 +238,6 @@
                                      Margin="0,10,0,0"/>
                         </Grid>
                     </GroupBox>
-
-                    <!-- Overlay Groups -->
-                    <GroupBox Header="Overlay Groups" Grid.Row="2">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <ListBox x:Name="GroupsListBox"
-                                     ItemsSource="{Binding OverlayGroups}"
-                                     SelectedItem="{Binding SelectedOverlayGroup}"
-                                     Grid.Row="0"
-                                     Margin="0,0,0,10">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="5">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="20"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <!-- Color indicator -->
-                                            <Rectangle Width="16" Height="16"
-                                                       Fill="{Binding Color, Converter={StaticResource ColorStringToBrushConverter}}"
-                                                       Stroke="White"
-                                                       StrokeThickness="1"/>
-                                            <!-- Group name -->
-                                            <TextBlock Grid.Column="1"
-                                                       Text="{Binding Name}"
-                                                       Margin="10,0,0,0"
-                                                       VerticalAlignment="Center"/>
-                                            <!-- Label count -->
-                                            <TextBlock Grid.Column="2"
-                                                       Text="{Binding Labels.Count, StringFormat=({0} labels)}"
-                                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                                       VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="Add" Command="{Binding AddGroupCommand}" MinWidth="70"/>
-                                <Button Content="Edit" Command="{Binding EditGroupCommand}" MinWidth="70"/>
-                                <Button Content="Remove" Command="{Binding RemoveGroupCommand}" MinWidth="70"/>
-                            </StackPanel>
-                        </Grid>
-                    </GroupBox>
-
-                    <!-- Status Indicator -->
-                    <Border Grid.Row="3"
-                            Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="10,5"
-                            Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Ellipse Width="12" Height="12" VerticalAlignment="Center">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="#666666"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsOverlayRunning}" Value="True">
-                                                <Setter Property="Fill" Value="#00FF00"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock VerticalAlignment="Center" Margin="8,0,0,0">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="Overlay Inactive"/>
-                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsOverlayRunning}" Value="True">
-                                                <Setter Property="Text" Value="Overlay Active - Detecting"/>
-                                                <Setter Property="Foreground" Value="#00FF00"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Note -->
-                    <Border Grid.Row="4"
-                            Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="10"
-                            Margin="0,10,0,0">
-                        <TextBlock Text="Note: For best compatibility, use borderless windowed mode in your game."
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   TextWrapping="Wrap"/>
-                    </Border>
                 </Grid>
             </TabItem>
 
@@ -347,9 +248,6 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <!-- Enable Training Checkbox and Create New -->
@@ -405,157 +303,9 @@
                                      AutomationProperties.HelpText="Hotkey to capture a screenshot (e.g., F1, F2, Ctrl+S)"/>
                         </Grid>
                     </GroupBox>
-
-                    <!-- Batch Processing -->
-                    <GroupBox Grid.Row="3" Header="Batch Processing" Margin="0,10,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Run detection on all captured images using the selected model."
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,10"/>
-
-                            <!-- Confidence Threshold Slider -->
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="50"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
-                                           Text="Confidence:"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,10,0"/>
-                                <Slider Grid.Column="1"
-                                        Minimum="0.05"
-                                        Maximum="0.95"
-                                        Value="{Binding AnnotationConfidenceThreshold}"
-                                        TickFrequency="0.05"
-                                        IsSnapToTickEnabled="True"
-                                        VerticalAlignment="Center"
-                                        AutomationProperties.Name="Annotation Confidence Threshold"
-                                        AutomationProperties.HelpText="Minimum confidence level for detections to be saved as annotations"/>
-                                <TextBlock Grid.Column="2"
-                                           Text="{Binding AnnotationConfidenceThreshold, StringFormat={}{0:P0}}"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Right"
-                                           MinWidth="40"/>
-                            </Grid>
-
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="POST PROCESS"
-                                        Command="{Binding PostProcessTrainingImagesCommand}"
-                                        FontWeight="Bold"
-                                        MinWidth="120"
-                                        AutomationProperties.Name="Post Process Training Images"
-                                        AutomationProperties.HelpText="Run YOLO detection on all training images and regenerate annotations">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsPostProcessing}" Value="True">
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Button Content="TRAIN"
-                                        Command="{Binding OpenTrainingWindowCommand}"
-                                        FontWeight="Bold"
-                                        MinWidth="80"
-                                        Margin="10,0,0,0"
-                                        AutomationProperties.Name="Open Training Window"
-                                        AutomationProperties.HelpText="Open the training workflow window to train or fine-tune models">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsEngineRunning}" Value="True">
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsPostProcessing}" Value="True">
-                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <TextBlock Text="{Binding PostProcessStatus}"
-                                           VerticalAlignment="Center"
-                                           Margin="15,0,0,0"
-                                           Foreground="{DynamicResource SecondaryTextBrush}"
-                                           Visibility="{Binding IsPostProcessing, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <!-- Training Status -->
-                    <Border Grid.Row="4"
-                            Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="10,5"
-                            Margin="0,10,0,0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Ellipse Width="12" Height="12" VerticalAlignment="Center">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="#666666"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsTrainingEnabled}" Value="True">
-                                                <Setter Property="Fill" Value="#00FF00"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock VerticalAlignment="Center" Margin="8,0,0,0"
-                                       Text="{Binding TrainingStatus, FallbackValue='Training Disabled', TargetNullValue='Training Disabled'}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsTrainingEnabled}" Value="True">
-                                                <Setter Property="Foreground" Value="#00FF00"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Info Note -->
-                    <Border Grid.Row="5"
-                            Background="{DynamicResource SurfaceBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="10"
-                            Margin="0,10,0,0"
-                            VerticalAlignment="Top">
-                        <StackPanel>
-                            <TextBlock Text="Training Mode"
-                                       FontWeight="Bold"
-                                       Margin="0,0,0,5"/>
-                            <TextBlock TextWrapping="Wrap"
-                                       Foreground="{DynamicResource SecondaryTextBrush}">
-                                <Run FontWeight="SemiBold" Text="Note: Engine is not required to capture screenshots."/>
-                                <Run Text=" When enabled, pressing the capture hotkey saves a screenshot to the training data folder. Use POST PROCESS to run detection on all captured images - this can be done offline after playing. Screenshots are saved in YOLO format for use with labeling tools like LabelImg."/>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
                 </Grid>
             </TabItem>
         </TabControl>
-
-        <!-- Bottom Button (shared) -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Content="APP SETTINGS"
-                    Command="{Binding OpenAppSettingsCommand}"
-                    AutomationProperties.Name="Open Application Settings"/>
-        </StackPanel>
-    </Grid>
+        </Grid>
+    </DockPanel>
 </Window>
