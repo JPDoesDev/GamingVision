@@ -2,19 +2,19 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "arc_raiders_model_v20260110_210957_640.onnx",
+  "modelFile": "arc_raiders_model_v20260116_004807_640.onnx",
   "windowTitle": "\uFEFF\u200BA\u200BR\uFEFF\u200B\u200B\u200B\uFEFFC\u200B\u200B\u2005\u200B\u200B\u200B\u200BRa\u200Bi\u200B\u200B\u200B\uFEFFder\uFEFFs",
   "primaryLabels": [
     "interact",
     "inv-title",
     "quick_menu",
     "st-title",
-    "waypoint",
     "hud-notification"
   ],
   "secondaryLabels": [
     "inv-info",
-    "st-info"
+    "st-info",
+    "waypoint"
   ],
   "tertiaryLabels": [
     "hud-weapon"
@@ -95,6 +95,18 @@
     {
       "name": "arc-rolling",
       "description": "ARC enemy: Rolling type (pop, fireball)"
+    },
+    {
+      "name": "map-title",
+      "description": ""
+    },
+    {
+      "name": "map-info",
+      "description": ""
+    },
+    {
+      "name": "hud-hp",
+      "description": ""
     }
   ],
   "hotkeys": {
@@ -127,7 +139,7 @@
   },
   "detection": {
     "autoReadCooldown": 2500,
-    "confidenceThreshold": 0.2,
+    "confidenceThreshold": 0.5,
     "autoReadConfidenceThreshold": 0.4,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
@@ -158,7 +170,8 @@
         "name": "Arc",
         "labels": [
           "arc-flying",
-          "arc-walking"
+          "arc-walking",
+          "arc-rolling"
         ],
         "color": "#FF0000",
         "thickness": 10,
@@ -177,7 +190,7 @@
     "trainingParameters": {
       "epochs": 150,
       "imageSize": 1440,
-      "batch": 0.85,
+      "batch": 0.7,
       "patience": 50,
       "learningRate": 0.01,
       "device": "cuda",

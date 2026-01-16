@@ -2,13 +2,44 @@
   "configVersion": "0.2.3",
   "gameId": "borderlands_1_enhanced",
   "displayName": "Borderlands 1 Enhanced",
-  "modelFile": "borderlands_1_enhanced_model_v20260110_222218_640.onnx",
-  "windowTitle": "",
-  "primaryLabels": [],
-  "secondaryLabels": [],
-  "tertiaryLabels": [],
+  "modelFile": "borderlands_1_enhanced_model_v20260116_143640_640.onnx",
+  "windowTitle": "Borderlands\u00AE Game of the Year Edition",
+  "primaryLabels": [
+    "interact"
+  ],
+  "secondaryLabels": [
+    "hud-hp"
+  ],
+  "tertiaryLabels": [
+    "hud-ammo"
+  ],
   "labelPriority": [],
-  "labels": [],
+  "labels": [
+    {
+      "name": "interact",
+      "description": ""
+    },
+    {
+      "name": "hud-ammo",
+      "description": ""
+    },
+    {
+      "name": "hud-hp",
+      "description": ""
+    },
+    {
+      "name": "hud-lvl",
+      "description": ""
+    },
+    {
+      "name": "waypoint",
+      "description": ""
+    },
+    {
+      "name": "hud-quest",
+      "description": ""
+    }
+  ],
   "hotkeys": {
     "readPrimary": "Alt\u002B1",
     "readSecondary": "Alt\u002B2",
@@ -39,14 +70,14 @@
   },
   "detection": {
     "autoReadCooldown": 2000,
-    "confidenceThreshold": 0.3,
-    "autoReadConfidenceThreshold": 0.6,
+    "confidenceThreshold": 0.1,
+    "autoReadConfidenceThreshold": 0.3,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
-    "autoReadEnabled": false,
+    "autoReadEnabled": true,
     "onlyReadChanges": true,
-    "readPrimaryLabelAloud": true,
+    "readPrimaryLabelAloud": false,
     "readSecondaryLabelAloud": false,
     "readTertiaryLabelAloud": false
   },
@@ -54,7 +85,19 @@
     "enabled": false,
     "confidenceThreshold": 0.5,
     "toggleHotkey": "Alt\u002BO",
-    "groups": []
+    "groups": [
+      {
+        "name": "Waypoint",
+        "labels": [
+          "waypoint"
+        ],
+        "color": "#FFFFFF",
+        "thickness": 7,
+        "showLabel": true,
+        "style": "highContrastBlack",
+        "confidenceThreshold": 0.15
+      }
+    ]
   },
   "training": {
     "enabled": true,
@@ -63,9 +106,9 @@
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.1,
     "trainingParameters": {
-      "epochs": 150,
+      "epochs": 200,
       "imageSize": 1440,
-      "batch": 0.7,
+      "batch": 0.9,
       "patience": 50,
       "learningRate": 0.01,
       "device": "cuda",
@@ -73,5 +116,21 @@
       "cacheImages": true,
       "useMixedPrecision": true
     }
+  },
+  "waypoint": {
+    "enabled": true,
+    "label": "waypoint",
+    "mode": "read",
+    "readIntervalSeconds": 2
+  },
+  "crosshair": {
+    "offsetX": 0,
+    "offsetY": 0,
+    "shape": "Circle",
+    "color": "#FFFFFF",
+    "outlineColor": "#000000",
+    "size": 75,
+    "thickness": 6,
+    "outlineThickness": 5
   }
 }
