@@ -121,7 +121,7 @@ public class WindowsCaptureService : IScreenCaptureService
 
         // Get DXGI device for WinRT interop
         var dxgiGuid = typeof(IDXGIDevice).GUID;
-        hr = Marshal.QueryInterface(_d3dDevice, ref dxgiGuid, out var dxgiDevice);
+        hr = Marshal.QueryInterface(_d3dDevice, in dxgiGuid, out var dxgiDevice);
         if (hr != 0)
         {
             throw new InvalidOperationException($"Failed to get DXGI device: 0x{hr:X8}");
@@ -530,7 +530,7 @@ public class WindowsCaptureService : IScreenCaptureService
             {
                 // QueryInterface for IDirect3DDxgiInterfaceAccess on the native pointer
                 var accessIid = typeof(IDirect3DDxgiInterfaceAccess).GUID;
-                var hr = Marshal.QueryInterface(abiPtr, ref accessIid, out var accessPtr);
+                var hr = Marshal.QueryInterface(abiPtr, in accessIid, out var accessPtr);
                 if (hr != 0 || accessPtr == IntPtr.Zero)
                 {
                     Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"ERROR: QueryInterface for IDirect3DDxgiInterfaceAccess failed (hr=0x{hr:X8})");

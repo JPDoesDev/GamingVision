@@ -16,7 +16,7 @@ An accessibility tool for visually impaired gamers that uses computer vision (YO
 ## Requirements
 
 - Windows 10/11 (64-bit)
-- .NET 8.0 Runtime
+- .NET 10.0 Runtime
 - GPU with DirectML support (NVIDIA, AMD, or Intel) - falls back to CPU if unavailable
 - Python 3.10-3.12 (only for model export)
 
@@ -30,7 +30,7 @@ dotnet build -c Release
 
 The executable will be at:
 ```
-src\GamingVision\bin\Release\net8.0-windows10.0.22621.0\win-x64\GamingVision.exe
+src\GamingVision\bin\Release\net10.0-windows10.0.22621.0\win-x64\GamingVision.exe
 ```
 
 ### 2. Export Your YOLO Model
@@ -243,7 +243,7 @@ If the application crashes, check `crash_log.txt` in the application directory f
 
 ## Technology Stack
 
-- **Framework**: .NET 8, WPF
+- **Framework**: .NET 10, WPF
 - **MVVM**: CommunityToolkit.Mvvm
 - **ML Inference**: ONNX Runtime 1.16.3 with DirectML
 - **Screen Capture**: Windows.Graphics.Capture API
