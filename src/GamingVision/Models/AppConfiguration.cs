@@ -8,7 +8,7 @@ public class AppConfiguration
     /// <summary>
     /// Configuration file version for migration purposes.
     /// </summary>
-    public string Version { get; set; } = "0.2.7";
+    public string Version { get; set; } = "0.3.0";
 
     /// <summary>
     /// Currently selected game profile identifier.
@@ -70,7 +70,7 @@ public class AppConfiguration
     /// </summary>
     public static AppConfiguration CreateDefault() => new()
     {
-        Version = "0.2.7",
+        Version = "0.3.0",
         SelectedGame = "no_mans_sky",
         UseDirectML = true,
         AutoStartDetection = false,
