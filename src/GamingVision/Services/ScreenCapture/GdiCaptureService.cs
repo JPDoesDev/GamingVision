@@ -27,6 +27,9 @@ public class GdiCaptureService : IScreenCaptureService
     // Frame ID counter for performance tracking (shared with WindowsCaptureService for continuity)
     private static ulong _frameCounter;
 
+    // Limit concurrent frame processing to prevent thread pool exhaustion
+    private readonly SemaphoreSlim _frameProcessingSemaphore = new(2, 2);
+
     public bool IsCapturing { get; private set; }
 
     public event EventHandler<CapturedFrame>? FrameCaptured;
@@ -128,17 +131,29 @@ public class GdiCaptureService : IScreenCaptureService
                     var handler = FrameCaptured;
                     if (handler != null)
                     {
-                        _ = Task.Run(() =>
+                        // Skip frame if processing is backed up (prevents thread pool exhaustion)
+                        if (!_frameProcessingSemaphore.Wait(0))
                         {
-                            try
+                            frame.Dispose();
+                        }
+                        else
+                        {
+                            _ = Task.Run(() =>
                             {
-                                handler.Invoke(this, frame);
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Frame handler error: {ex.Message}");
-                            }
-                        });
+                                try
+                                {
+                                    handler.Invoke(this, frame);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"Frame handler error: {ex.Message}");
+                                }
+                                finally
+                                {
+                                    _frameProcessingSemaphore.Release();
+                                }
+                            });
+                        }
                     }
                 }
 

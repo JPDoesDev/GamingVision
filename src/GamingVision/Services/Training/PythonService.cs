@@ -518,7 +518,7 @@ public class PythonService : IDisposable
         }
 
         // Development fallback: check for project structure
-        var devPath = Path.Combine(exeDir, "..", "..", "..", "..", "..", "src", "GamingVision.TrainingTool", "scripts");
+        var devPath = Path.Combine(exeDir, "..", "..", "..", "..", "..", "src", "GamingVision", "scripts");
         if (Directory.Exists(devPath))
         {
             return Path.GetFullPath(devPath);

@@ -16,6 +16,10 @@ public class TrainingDataManager
     private readonly string _trainingDataRoot;
     private readonly string _gameId;
 
+    // Storage limits to prevent disk exhaustion
+    private const int MaxImagesPerGame = 5000;
+    private const long MaxStorageSizeBytes = 2L * 1024 * 1024 * 1024; // 2 GB
+
     public string GameId => _gameId;
     public string ImagesPath => Path.Combine(_trainingDataRoot, _gameId, "images");
     public string LabelsPath => Path.Combine(_trainingDataRoot, _gameId, "labels");
@@ -64,9 +68,27 @@ public class TrainingDataManager
 
     /// <summary>
     /// Saves a captured frame as a JPEG image.
+    /// Throws InvalidOperationException if storage limits are exceeded.
     /// </summary>
     public void SaveScreenshot(CapturedFrame frame, string filename)
     {
+        // Check storage limits before saving
+        var imageCount = GetImageFiles().Length;
+        if (imageCount >= MaxImagesPerGame)
+        {
+            throw new InvalidOperationException(
+                $"Training data limit reached: {MaxImagesPerGame} images. " +
+                "Please merge to base training data or delete old captures before continuing.");
+        }
+
+        var currentSize = GetTrainingDataSize();
+        if (currentSize >= MaxStorageSizeBytes)
+        {
+            throw new InvalidOperationException(
+                $"Training data size limit reached: {MaxStorageSizeBytes / (1024 * 1024 * 1024)} GB. " +
+                "Please merge to base training data or delete old captures before continuing.");
+        }
+
         var imagePath = Path.Combine(ImagesPath, filename + ".jpg");
 
         // Convert BGRA byte array to Bitmap and save
@@ -204,5 +226,38 @@ public class TrainingDataManager
     public static string GetDefaultTrainingDataRoot()
     {
         return @"C:\GamingVision\New_Training_Data";
+    }
+
+    /// <summary>
+    /// Gets the total size of training data (images + labels) in bytes.
+    /// </summary>
+    public long GetTrainingDataSize()
+    {
+        long totalSize = 0;
+
+        try
+        {
+            if (Directory.Exists(ImagesPath))
+            {
+                foreach (var file in Directory.GetFiles(ImagesPath))
+                {
+                    totalSize += new FileInfo(file).Length;
+                }
+            }
+
+            if (Directory.Exists(LabelsPath))
+            {
+                foreach (var file in Directory.GetFiles(LabelsPath))
+                {
+                    totalSize += new FileInfo(file).Length;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Failed to calculate training data size: {ex.Message}");
+        }
+
+        return totalSize;
     }
 }

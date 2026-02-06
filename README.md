@@ -80,10 +80,8 @@ GamingVision/
 │   │   │   ├── Hotkeys/                 # Global hotkey service
 │   │   │   └── ScreenCapture/           # Windows Graphics Capture
 │   │   ├── Utilities/                   # ConfigManager, Logger, GPU detection
-│   │   └── Native/                      # Win32 P/Invoke declarations
-│   │
-│   └── GamingVision.TrainingTool/       # Training scripts and tools
-│       └── scripts/                     # Python training pipeline scripts
+│   │   ├── Native/                      # Win32 P/Invoke declarations
+│   │   └── scripts/                     # Python training pipeline scripts
 │
 ├── GameModels/                          # Per-game model folders
 │   └── no_mans_sky/

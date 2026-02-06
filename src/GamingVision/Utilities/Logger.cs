@@ -29,6 +29,13 @@ public static class Logger
     private static bool _isEnabled;
     private static bool _isInitialized;
 
+    // Log rotation settings
+    private const long MaxLogFileSize = 10 * 1024 * 1024; // 10 MB
+    private const int MaxArchivedLogs = 5;
+    private static int _logWriteCount;
+    private static int _perfLogWriteCount;
+    private const int RotationCheckInterval = 100; // Check every 100 writes
+
     /// <summary>
     /// Gets whether logging is currently enabled.
     /// </summary>
@@ -222,6 +229,13 @@ public static class Logger
         {
             try
             {
+                // Check for rotation periodically (not every write for performance)
+                if (++_perfLogWriteCount >= RotationCheckInterval)
+                {
+                    _perfLogWriteCount = 0;
+                    RotateLogFileIfNeeded(_perfLogFilePath);
+                }
+
                 File.AppendAllText(_perfLogFilePath, logLine + Environment.NewLine);
             }
             catch (Exception ex)
@@ -250,6 +264,13 @@ public static class Logger
         {
             try
             {
+                // Check for rotation periodically (not every write for performance)
+                if (++_logWriteCount >= RotationCheckInterval)
+                {
+                    _logWriteCount = 0;
+                    RotateLogFileIfNeeded(_logFilePath);
+                }
+
                 File.AppendAllText(_logFilePath, logLine + Environment.NewLine);
             }
             catch (Exception ex)
@@ -294,4 +315,41 @@ public static class Logger
     /// Gets the full path to the log file.
     /// </summary>
     public static string? GetLogFilePath() => _logFilePath;
+
+    /// <summary>
+    /// Rotates a log file if it exceeds the maximum size.
+    /// </summary>
+    private static void RotateLogFileIfNeeded(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+            return;
+
+        try
+        {
+            var fileInfo = new FileInfo(filePath);
+            if (fileInfo.Length <= MaxLogFileSize)
+                return;
+
+            // Rotate: log.txt -> log.1.txt -> log.2.txt -> ... -> delete log.N.txt
+            for (int i = MaxArchivedLogs - 1; i >= 1; i--)
+            {
+                var oldFile = $"{filePath}.{i}";
+                var newFile = $"{filePath}.{i + 1}";
+                if (File.Exists(oldFile))
+                {
+                    if (i == MaxArchivedLogs - 1)
+                        File.Delete(oldFile);
+                    else
+                        File.Move(oldFile, newFile);
+                }
+            }
+
+            // Move current to .1
+            File.Move(filePath, $"{filePath}.1");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to rotate log file: {ex.Message}");
+        }
+    }
 }

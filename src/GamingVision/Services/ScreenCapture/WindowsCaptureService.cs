@@ -45,6 +45,9 @@ public class WindowsCaptureService : IScreenCaptureService
     // Frame ID counter for performance tracking
     private static ulong _frameCounter;
 
+    // Limit concurrent frame processing to prevent thread pool exhaustion
+    private readonly SemaphoreSlim _frameProcessingSemaphore = new(2, 2);
+
     public bool IsCapturing { get; private set; }
 
     public event EventHandler<CapturedFrame>? FrameCaptured;
@@ -467,6 +470,13 @@ public class WindowsCaptureService : IScreenCaptureService
                 var handler = FrameCaptured;
                 if (handler != null)
                 {
+                    // Skip frame if processing is backed up (prevents thread pool exhaustion)
+                    if (!_frameProcessingSemaphore.Wait(0))
+                    {
+                        capturedFrame.Dispose();
+                        return;
+                    }
+
                     _ = Task.Run(() =>
                     {
                         try
@@ -476,6 +486,10 @@ public class WindowsCaptureService : IScreenCaptureService
                         catch (Exception ex)
                         {
                             Debug.WriteLine($"Frame handler error: {ex.Message}");
+                        }
+                        finally
+                        {
+                            _frameProcessingSemaphore.Release();
                         }
                     });
                 }

@@ -2,14 +2,15 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "arc_raiders_model_v20260116_004807_640.onnx",
-  "windowTitle": "\uFEFF\u200BA\u200BR\uFEFF\u200B\u200B\u200B\uFEFFC\u200B\u200B\u2005\u200B\u200B\u200B\u200BRa\u200Bi\u200B\u200B\u200B\uFEFFder\uFEFFs",
+  "modelFile": "arc_raiders_model_v20260117_003735_640.onnx",
+  "windowTitle": "\uFEFF\uFEFFAR\uFEFFC R\u200Ba\uFEFF\uFEFF\u200B\uFEFF\uFEFF\u200B\u200B\u200B\uFEFFid\u200B\uFEFF\u200Be\u200B\uFEFF\u200Br\u200Bs",
   "primaryLabels": [
     "interact",
     "inv-title",
     "quick_menu",
     "st-title",
-    "hud-notification"
+    "hud-notification",
+    "map-title"
   ],
   "secondaryLabels": [
     "inv-info",
@@ -118,7 +119,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "fullscreen",
+    "method": "window",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -140,7 +141,7 @@
   "detection": {
     "autoReadCooldown": 2500,
     "confidenceThreshold": 0.5,
-    "autoReadConfidenceThreshold": 0.4,
+    "autoReadConfidenceThreshold": 0.6,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
@@ -188,9 +189,9 @@
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.2,
     "trainingParameters": {
-      "epochs": 150,
+      "epochs": 200,
       "imageSize": 1440,
-      "batch": 0.7,
+      "batch": 0.8,
       "patience": 50,
       "learningRate": 0.01,
       "device": "cuda",

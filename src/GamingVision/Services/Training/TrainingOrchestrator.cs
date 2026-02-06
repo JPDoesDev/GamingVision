@@ -80,6 +80,7 @@ public class TrainingOrchestrator : IDisposable
     {
         var result = new TrainingResult();
         var scriptsDir = PythonService.GetScriptsDirectory();
+        string? trainingDataPathForCleanup = null;
 
         if (string.IsNullOrEmpty(scriptsDir))
         {
@@ -119,6 +120,9 @@ public class TrainingOrchestrator : IDisposable
             {
                 trainingDataPath = baseTrainingDataPath;
             }
+
+            // Store for cleanup in finally block
+            trainingDataPathForCleanup = trainingDataPath;
 
             // Validate training data exists
             var imagesPath = Path.Combine(trainingDataPath, "images");
@@ -221,6 +225,14 @@ public class TrainingOrchestrator : IDisposable
             result.Message = $"Training failed: {ex.Message}";
             OnProgressChanged($"Error: {ex.Message}");
             return result;
+        }
+        finally
+        {
+            // Always clean up temporary train/val split folders, even on failure or cancellation
+            if (!string.IsNullOrEmpty(trainingDataPathForCleanup))
+            {
+                CleanupSplitFolders(trainingDataPathForCleanup);
+            }
         }
     }
 

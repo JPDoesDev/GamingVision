@@ -33,8 +33,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private IHotkeyService? _hotkeyService;
     private CapturedFrame? _latestFrame;
     private readonly object _frameLock = new();
-    private int _frameCount;
     private int _detectionCount;
+    private long _lastStatusUpdateTicks;
+    private volatile bool _overlayDispatchPending;
     private bool _disposed;
 
     // Overlay fields
@@ -613,16 +614,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void LoadGames()
     {
-        Games.Clear();
-
+        // Batch update: create new collection to avoid N+1 CollectionChanged events
+        var newGames = new ObservableCollection<GameProfileItem>();
         foreach (var (gameId, profile) in _configManager.GameProfiles)
         {
-            Games.Add(new GameProfileItem
+            newGames.Add(new GameProfileItem
             {
                 Key = gameId,
                 DisplayName = profile.DisplayName
             });
         }
+        Games = newGames;
 
         // Select the previously selected game
         SelectedGame = Games.FirstOrDefault(g => g.Key == _appConfig.SelectedGame)
@@ -654,11 +656,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         OverlayToggleHotkey = profile.Overlay.ToggleHotkey;
 
-        OverlayGroups.Clear();
+        // Batch update: create new collection to avoid N+1 CollectionChanged events
+        var newGroups = new ObservableCollection<OverlayGroup>();
         foreach (var group in profile.Overlay.Groups)
         {
-            OverlayGroups.Add(group);
+            newGroups.Add(group);
         }
+        OverlayGroups = newGroups;
     }
 
     private void UpdateHotkeyDisplay()
@@ -773,7 +777,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
             IsEngineRunning = true;
             IsWaitingForWindow = true;
             DetectionStatus = $"Waiting for: {profile.WindowTitle}";
-            _frameCount = 0;
             _detectionCount = 0;
             CurrentDetectionCount = 0;
 
@@ -790,7 +793,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
             IsEngineRunning = true;
             IsWaitingForWindow = false;
             DetectionStatus = "Running";
-            _frameCount = 0;
             _detectionCount = 0;
             CurrentDetectionCount = 0;
 
@@ -947,7 +949,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void StartWindowPolling()
     {
-        StopWindowPolling();
+        // Cancel any existing polling (fire-and-forget since we're starting fresh)
+        _windowPollingCts?.Cancel();
+        _windowPollingCts?.Dispose();
 
         _windowPollingCts = new CancellationTokenSource();
         _windowPollingTask = Task.Run(() => WindowPollingLoopAsync(_windowPollingCts.Token));
@@ -956,9 +960,24 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Stops the window polling loop.
     /// </summary>
-    private void StopWindowPolling()
+    private async Task StopWindowPollingAsync()
     {
         _windowPollingCts?.Cancel();
+        if (_windowPollingTask != null)
+        {
+            try
+            {
+                await _windowPollingTask.WaitAsync(TimeSpan.FromMilliseconds(500));
+            }
+            catch (TimeoutException)
+            {
+                // Task didn't complete in time, continue anyway
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation is requested
+            }
+        }
         _windowPollingCts?.Dispose();
         _windowPollingCts = null;
         _windowPollingTask = null;
@@ -1046,10 +1065,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     {
                         EnableOverlay();
                     }
-                    if (IsCrosshairEnabled)
-                    {
-                        EnableCrosshair();
-                    }
+                    // Note: Crosshair is independent - don't re-enable here
                 });
 
                 Logger.Log("OnWindowFound: Capture started successfully");
@@ -1087,15 +1103,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 CurrentDetectionCount = 0;
 
                 // Disable overlay while waiting (no frames to render)
+                // Note: Crosshair stays visible - it's independent of the game window
                 if (IsOverlayEnabled && _overlayWindow != null)
                 {
                     _overlayWindow.Hide();
-                }
-
-                // Hide crosshair while waiting
-                if (IsCrosshairEnabled && _crosshairWindow != null)
-                {
-                    _crosshairWindow.Hide();
                 }
             });
         }
@@ -1109,14 +1120,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         Logger.Log("Stopping engine");
 
-        // Stop timers first
-        StopWindowPolling();
+        // Stop timers first (fire-and-forget async cleanup)
+        _ = StopWindowPollingAsync();
         StopWaypointTracker();
 
-        // Disable all features first
+        // Disable detection-dependent features (crosshair is independent)
         DisableScreenReader();
         DisableOverlay();
-        DisableCrosshair();
 
         // Stop capture and detection
         if (_captureManager != null)
@@ -1144,8 +1154,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            _frameCount++;
-
             // Update frame timing for window loss detection
             _captureManager?.UpdateLastFrameTime();
 
@@ -1162,24 +1170,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Logger.PerfFrameTimed(frameId, captureStartTicks, "PIPELINE", "Frame received by MainViewModel");
             }
-            else if (_frameCount % 100 == 1)
-            {
-                Logger.Log($"OnFrameCaptured: Frame {_frameCount}, {frameWidth}x{frameHeight}, disposed={e.IsDisposed}");
-            }
 
-            // Store latest frame for OCR processing
+            // Store latest frame for OCR processing, disposing previous frame to prevent memory leak
             lock (_frameLock)
             {
+                _latestFrame?.Dispose();
                 _latestFrame = e;
             }
 
             var detectionService = _detectionManager?.DetectionService;
             if (detectionService == null || !detectionService.IsReady)
             {
-                if (_frameCount % 100 == 1)
-                {
-                    Logger.Warn($"OnFrameCaptured: Detection not ready");
-                }
                 return;
             }
 
@@ -1190,6 +1191,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // Fast path: Run detection once, use results for both overlay and screen reader
             if (overlayNeedsUpdate)
             {
+                // Skip overlay rendering if dispatcher queue is backed up (prevents UI thread congestion)
+                if (_overlayDispatchPending)
+                {
+                    // Still process screen reader if enabled
+                    if (screenReaderNeedsUpdate && _detectionManager != null)
+                    {
+                        _ = _detectionManager.ProcessFrameAsync(e);
+                    }
+                    return;
+                }
+
                 var detectStartTicks = Stopwatch.GetTimestamp();
                 try
                 {
@@ -1210,10 +1222,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
                             Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", "Dispatcher queued");
                         }
 
+                        _overlayDispatchPending = true;
                         System.Windows.Application.Current?.Dispatcher.BeginInvoke(
                             System.Windows.Threading.DispatcherPriority.Render,
                             () =>
                             {
+                                _overlayDispatchPending = false;
                                 var dispatchMs = (double)(Stopwatch.GetTimestamp() - dispatchStartTicks) / Stopwatch.Frequency * 1000.0;
                                 if (frameId > 0)
                                 {
@@ -1275,12 +1289,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 }
             }
 
-            // Update UI every 30 frames (roughly 1 second at 30 FPS)
-            if (_frameCount % 30 == 0)
+            // Update UI roughly once per second (time-based throttle)
+            var currentTicks = Stopwatch.GetTimestamp();
+            var elapsedMs = (currentTicks - _lastStatusUpdateTicks) * 1000.0 / Stopwatch.Frequency;
+            if (elapsedMs >= 1000)
             {
+                _lastStatusUpdateTicks = currentTicks;
                 System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
-                    DetectionStatus = $"Running (Frame {_frameCount}, {frameWidth}x{frameHeight})";
+                    DetectionStatus = $"Running ({frameWidth}x{frameHeight})";
                     CurrentDetectionCount = _detectionCount;
                 });
             }
@@ -1500,8 +1517,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             DisableScreenReader();
             DisableOverlay();
 
-            // Stop capture and detection
-            StopWindowPolling();
+            // Stop capture and detection (fire-and-forget async cleanup)
+            _ = StopWindowPollingAsync();
             StopWaypointTracker();
             _captureManager?.Stop();
             IsEngineRunning = false;
@@ -1916,7 +1933,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void EnableCrosshair()
     {
-        if (!IsEngineRunning || IsCrosshairRunning) return;
+        if (IsCrosshairRunning) return;
 
         Logger.Log("Enabling crosshair");
         var profile = GetSelectedGameProfile();
@@ -2055,16 +2072,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnIsCrosshairEnabledChanged(bool value)
     {
-        if (IsEngineRunning)
+        // Crosshair is independent of engine - can toggle anytime
+        if (value)
         {
-            if (value)
-            {
-                EnableCrosshair();
-            }
-            else
-            {
-                DisableCrosshair();
-            }
+            EnableCrosshair();
+        }
+        else
+        {
+            DisableCrosshair();
         }
 
         // Save setting

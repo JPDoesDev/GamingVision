@@ -60,12 +60,13 @@
 
   <!-- Include training scripts for in-app training workflow -->
   <ItemGroup>
-    <Content Include="..\GamingVision.TrainingTool\scripts\*.py">
-      <Link>scripts\%(Filename)%(Extension)</Link>
+    <Content Include="scripts\*.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\GamingVision.TrainingTool\scripts\requirements.txt">
-      <Link>scripts\requirements.txt</Link>
+    <Content Include="scripts\requirements.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="scripts\yolo11n.pt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
