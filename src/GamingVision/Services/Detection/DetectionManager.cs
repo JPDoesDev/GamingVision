@@ -33,9 +33,14 @@ public class DetectionManager : IDisposable
     private readonly List<DetectedObject> _secondaryDetectionsBuffer = new();
     private readonly List<DetectedObject> _tertiaryDetectionsBuffer = new();
     private readonly List<DetectedObject> _autoReadPrimaryBuffer = new();
+    private readonly List<DetectedObject> _detectionsToReadBuffer = new();
     private readonly Dictionary<string, TrackedPosition> _currentPositionsBuffer = new();
     private readonly HashSet<string> _previousLabelsBuffer = new();
     private readonly HashSet<string> _currentLabelsBuffer = new();
+    private readonly HashSet<string> _disappearanceCheckBuffer = new();
+
+    // Priority lookup dictionary for O(1) label priority lookups (Phase 2 optimization)
+    private Dictionary<string, int>? _priorityLookup;
 
     /// <summary>
     /// Gets whether the detection manager is currently running.
@@ -82,6 +87,13 @@ public class DetectionManager : IDisposable
     public async Task<bool> InitializeAsync(GameProfile profile, string modelsDirectory)
     {
         _currentProfile = profile;
+
+        // Build priority lookup dictionary for O(1) lookups during sorting (Phase 2 optimization)
+        _priorityLookup = new Dictionary<string, int>(profile.LabelPriority.Count);
+        for (int i = 0; i < profile.LabelPriority.Count; i++)
+        {
+            _priorityLookup[profile.LabelPriority[i]] = i;
+        }
 
         // Build model path
         var modelPath = Path.Combine(modelsDirectory, profile.ModelFile);
@@ -185,28 +197,24 @@ public class DetectionManager : IDisposable
                 }
             }
 
-            // Create readonly references for event (avoid exposing internal buffers)
-            var primaryDetections = _primaryDetectionsBuffer.ToList();
-            var secondaryDetections = _secondaryDetectionsBuffer.ToList();
-            var tertiaryDetections = _tertiaryDetectionsBuffer.ToList();
-            var autoReadPrimaryDetections = _autoReadPrimaryBuffer;
-
-            // Raise detection event
+            // Raise detection event with direct buffer references
+            // Event handlers should not modify these lists (Phase 2 optimization - avoid ToList() copies)
             DetectionsReady?.Invoke(this, new DetectionEventArgs
             {
                 AllDetections = detections,
-                PrimaryDetections = primaryDetections,
-                SecondaryDetections = secondaryDetections,
-                TertiaryDetections = tertiaryDetections,
+                PrimaryDetections = _primaryDetectionsBuffer,
+                SecondaryDetections = _secondaryDetectionsBuffer,
+                TertiaryDetections = _tertiaryDetectionsBuffer,
                 Timestamp = DateTime.UtcNow
             });
 
             // Position-based auto-read: detect new labels or significant position changes
-            var detectionsToRead = new List<DetectedObject>();
+            // Use reusable buffer (Phase 2 optimization)
+            _detectionsToReadBuffer.Clear();
 
             // Build current positions map (use highest confidence detection per label)
             // Sort descending by confidence, then take first per label
-            foreach (var det in autoReadPrimaryDetections.OrderByDescending(d => d.Confidence))
+            foreach (var det in _autoReadPrimaryBuffer.OrderByDescending(d => d.Confidence))
             {
                 if (!_currentPositionsBuffer.ContainsKey(det.Label))
                 {
@@ -241,10 +249,10 @@ public class DetectionManager : IDisposable
                 if (!previousLabels.Contains(label))
                 {
                     // NEW label
-                    var det = autoReadPrimaryDetections.FirstOrDefault(d => d.Label == label);
+                    var det = _autoReadPrimaryBuffer.FirstOrDefault(d => d.Label == label);
                     if (det != null)
                     {
-                        detectionsToRead.Add(det);
+                        _detectionsToReadBuffer.Add(det);
                         Logger.Log($"AutoRead: New label appeared: {label}");
                     }
                 }
@@ -256,10 +264,10 @@ public class DetectionManager : IDisposable
 
                     if (currPos.HasMovedSignificantly(prevPos, PositionChangeThreshold))
                     {
-                        var det = autoReadPrimaryDetections.FirstOrDefault(d => d.Label == label);
+                        var det = _autoReadPrimaryBuffer.FirstOrDefault(d => d.Label == label);
                         if (det != null)
                         {
-                            detectionsToRead.Add(det);
+                            _detectionsToReadBuffer.Add(det);
                             Logger.Log($"AutoRead: Label position changed significantly: {label}");
                         }
                     }
@@ -267,9 +275,9 @@ public class DetectionManager : IDisposable
             }
 
             // Fire event if there are detections to read
-            if (detectionsToRead.Count > 0)
+            if (_detectionsToReadBuffer.Count > 0)
             {
-                var sortedDetections = SortByPriority(detectionsToRead, _currentProfile.LabelPriority);
+                var sortedDetections = SortByPriority(_detectionsToReadBuffer, _currentProfile.LabelPriority);
 
                 PrimaryObjectChanged?.Invoke(this, new PrimaryObjectChangedEventArgs
                 {
@@ -293,18 +301,39 @@ public class DetectionManager : IDisposable
     }
 
     /// <summary>
-    /// Sorts detections by label priority.
+    /// Sorts detections by label priority using pre-built lookup dictionary.
+    /// Uses List.Sort() to avoid LINQ allocations (Phase 2 optimization).
     /// </summary>
-    private static List<DetectedObject> SortByPriority(List<DetectedObject> detections, List<string> priorityOrder)
+    private List<DetectedObject> SortByPriority(List<DetectedObject> detections, List<string> priorityOrder)
     {
-        return detections
-            .OrderBy(d =>
-            {
-                var index = priorityOrder.IndexOf(d.Label);
-                return index >= 0 ? index : int.MaxValue;
-            })
-            .ThenByDescending(d => d.Confidence)
-            .ToList();
+        if (detections.Count <= 1)
+            return detections;
+
+        // Use pre-built lookup dictionary for O(1) priority lookups
+        var lookup = _priorityLookup;
+        if (lookup == null || lookup.Count == 0)
+        {
+            // Fallback if lookup not built (shouldn't happen after InitializeAsync)
+            return detections.OrderBy(d => priorityOrder.IndexOf(d.Label) is var idx && idx >= 0 ? idx : int.MaxValue)
+                .ThenByDescending(d => d.Confidence)
+                .ToList();
+        }
+
+        // Sort in-place using comparison delegate (avoids LINQ allocations)
+        detections.Sort((a, b) =>
+        {
+            int priorityA = lookup.TryGetValue(a.Label, out var pa) ? pa : int.MaxValue;
+            int priorityB = lookup.TryGetValue(b.Label, out var pb) ? pb : int.MaxValue;
+
+            int priorityCompare = priorityA.CompareTo(priorityB);
+            if (priorityCompare != 0)
+                return priorityCompare;
+
+            // Higher confidence first (descending)
+            return b.Confidence.CompareTo(a.Confidence);
+        });
+
+        return detections;
     }
 
     /// <summary>
@@ -516,7 +545,11 @@ public class DetectionManager : IDisposable
         if (_trackedObjects.Count == 0) return;
 
         var labelsToRemove = new List<string>();
-        var currentLabels = currentDetections.Select(d => d.Label).ToHashSet();
+        // Use pre-allocated buffer instead of ToHashSet() (Phase 2 optimization)
+        _disappearanceCheckBuffer.Clear();
+        foreach (var d in currentDetections)
+            _disappearanceCheckBuffer.Add(d.Label);
+        var currentLabels = _disappearanceCheckBuffer;
 
         foreach (var (label, trackedDetection) in _trackedObjects)
         {

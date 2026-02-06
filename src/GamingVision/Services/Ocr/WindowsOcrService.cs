@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Globalization;
@@ -153,15 +154,19 @@ public class WindowsOcrService : IOcrService
 
     /// <summary>
     /// Creates a cropped SoftwareBitmap from the source frame data.
+    /// Uses ArrayPool to reduce GC pressure (Phase 2 optimization).
     /// </summary>
     private static SoftwareBitmap? CreateCroppedBitmap(
         byte[] sourceData, int sourceWidth, int sourceHeight, int sourceStride,
         int cropX, int cropY, int cropWidth, int cropHeight)
     {
+        int requiredSize = cropWidth * cropHeight * 4;
+        byte[]? croppedData = null;
+
         try
         {
-            // Extract the cropped region into a new byte array
-            var croppedData = new byte[cropWidth * cropHeight * 4];
+            // Use ArrayPool for cropped buffer to reduce GC pressure
+            croppedData = ArrayPool<byte>.Shared.Rent(requiredSize);
             int croppedStride = cropWidth * 4;
 
             for (int row = 0; row < cropHeight; row++)
@@ -184,7 +189,8 @@ public class WindowsOcrService : IOcrService
                 cropHeight,
                 BitmapAlphaMode.Premultiplied);
 
-            bitmap.CopyFromBuffer(croppedData.AsBuffer());
+            // CopyFromBuffer only reads requiredSize bytes, safe with rented buffer
+            bitmap.CopyFromBuffer(croppedData.AsBuffer(0, requiredSize));
 
             return bitmap;
         }
@@ -192,6 +198,14 @@ public class WindowsOcrService : IOcrService
         {
             Debug.WriteLine($"Error creating cropped bitmap: {ex.Message}");
             return null;
+        }
+        finally
+        {
+            // Return pooled buffer
+            if (croppedData != null)
+            {
+                ArrayPool<byte>.Shared.Return(croppedData);
+            }
         }
     }
 

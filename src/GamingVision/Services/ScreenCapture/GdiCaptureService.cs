@@ -30,6 +30,13 @@ public class GdiCaptureService : IScreenCaptureService
     // Limit concurrent frame processing to prevent thread pool exhaustion
     private readonly SemaphoreSlim _frameProcessingSemaphore = new(2, 2);
 
+    // Cached GDI objects for monitor capture (Phase 2 optimization)
+    // Reusing Bitmap/Graphics avoids ~2-5ms allocation overhead per frame
+    private Bitmap? _cachedBitmap;
+    private Graphics? _cachedGraphics;
+    private int _cachedWidth;
+    private int _cachedHeight;
+
     public bool IsCapturing { get; private set; }
 
     public event EventHandler<CapturedFrame>? FrameCaptured;
@@ -289,7 +296,10 @@ public class GdiCaptureService : IScreenCaptureService
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
 
-    private static CapturedFrame? CaptureRegion(Rectangle bounds)
+    /// <summary>
+    /// Captures a screen region using cached GDI objects when possible (Phase 2 optimization).
+    /// </summary>
+    private CapturedFrame? CaptureRegion(Rectangle bounds)
     {
         // Generate frame ID and capture start time for performance tracking
         var frameId = Interlocked.Increment(ref _frameCounter);
@@ -299,10 +309,35 @@ public class GdiCaptureService : IScreenCaptureService
         {
             Logger.PerfFrame(frameId, "CAPTURE", "GDI capture started");
 
-            using var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-            using var graphics = Graphics.FromImage(bitmap);
+            // Check if we can reuse cached bitmap (same dimensions)
+            Bitmap bitmap;
+            Graphics graphics;
+            bool usingCached = false;
 
-            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", "Bitmap allocated");
+            if (_cachedBitmap != null && _cachedGraphics != null &&
+                _cachedWidth == bounds.Width && _cachedHeight == bounds.Height)
+            {
+                // Reuse cached objects
+                bitmap = _cachedBitmap;
+                graphics = _cachedGraphics;
+                usingCached = true;
+            }
+            else
+            {
+                // Dispose old cached objects if dimensions changed
+                _cachedGraphics?.Dispose();
+                _cachedBitmap?.Dispose();
+
+                // Create new cached objects
+                bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+                graphics = Graphics.FromImage(bitmap);
+                _cachedBitmap = bitmap;
+                _cachedGraphics = graphics;
+                _cachedWidth = bounds.Width;
+                _cachedHeight = bounds.Height;
+            }
+
+            Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", usingCached ? "Using cached bitmap" : "Bitmap allocated");
 
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
 
@@ -397,6 +432,12 @@ public class GdiCaptureService : IScreenCaptureService
             _latestFrame?.Dispose();
             _latestFrame = null;
         }
+
+        // Dispose cached GDI objects (Phase 2 optimization cleanup)
+        _cachedGraphics?.Dispose();
+        _cachedBitmap?.Dispose();
+        _cachedGraphics = null;
+        _cachedBitmap = null;
 
         GC.SuppressFinalize(this);
     }

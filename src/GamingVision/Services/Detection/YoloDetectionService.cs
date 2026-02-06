@@ -594,26 +594,41 @@ public class YoloDetectionService : IDetectionService
 
     /// <summary>
     /// Applies Non-Maximum Suppression to remove overlapping detections.
+    /// Uses boolean mask instead of list modifications (Phase 2 optimization).
     /// </summary>
     private static List<DetectedObject> ApplyNms(List<DetectedObject> detections, float iouThreshold)
     {
-        if (detections.Count == 0)
+        int count = detections.Count;
+        if (count == 0)
             return detections;
 
-        // Sort by confidence (descending)
-        var sorted = detections.OrderByDescending(d => d.Confidence).ToList();
-        var result = new List<DetectedObject>();
+        // Sort by confidence (descending) - single allocation
+        var sorted = detections.OrderByDescending(d => d.Confidence).ToArray();
+        var result = new List<DetectedObject>(count);
 
-        while (sorted.Count > 0)
+        // Use boolean mask to mark suppressed detections (avoids O(n) element shifts)
+        Span<bool> suppressed = count <= 128 ? stackalloc bool[count] : new bool[count];
+
+        for (int i = 0; i < count; i++)
         {
-            var best = sorted[0];
-            result.Add(best);
-            sorted.RemoveAt(0);
+            if (suppressed[i])
+                continue;
 
-            // Remove boxes that overlap too much with the best box
-            sorted.RemoveAll(d =>
-                d.Label == best.Label &&
-                CalculateIoU(best, d) > iouThreshold);
+            var best = sorted[i];
+            result.Add(best);
+
+            // Suppress all lower-confidence boxes that overlap with this one
+            for (int j = i + 1; j < count; j++)
+            {
+                if (suppressed[j])
+                    continue;
+
+                var other = sorted[j];
+                if (other.Label == best.Label && CalculateIoU(best, other) > iouThreshold)
+                {
+                    suppressed[j] = true;
+                }
+            }
         }
 
         return result;

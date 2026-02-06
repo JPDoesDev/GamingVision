@@ -25,6 +25,12 @@ public class WindowsTtsService : ITtsService
     private WaveOutEvent? _waveOut;
     private int _currentVolume = 100;
 
+    // Reusable beep sample buffer (Phase 2 optimization)
+    // Pre-allocated for 100ms at 44100Hz (most common beep duration)
+    private const int BeepSampleRate = 44100;
+    private float[]? _beepSampleBuffer;
+    private int _beepBufferDurationMs;
+
     public bool IsReady => _synthesizer != null;
     public bool IsSpeaking { get; private set; }
     public IReadOnlyList<VoiceInfo> AvailableVoices => _availableVoices;
@@ -492,6 +498,7 @@ public class WindowsTtsService : ITtsService
 
     /// <summary>
     /// Plays a beep sound with stereo panning for directional audio feedback.
+    /// Uses reusable sample buffer for common durations (Phase 2 optimization).
     /// </summary>
     public Task PlayBeepWithPanAsync(float pan, int frequencyHz = 880, int durationMs = 100)
     {
@@ -502,28 +509,41 @@ public class WindowsTtsService : ITtsService
         {
             try
             {
-                // Generate sine wave samples
-                const int sampleRate = 44100;
-                int sampleCount = (int)(sampleRate * durationMs / 1000.0);
-                var samples = new float[sampleCount];
+                int sampleCount = (int)(BeepSampleRate * durationMs / 1000.0);
 
+                // Reuse buffer if it's large enough, otherwise allocate new one
+                float[] samples;
+                if (_beepSampleBuffer != null && _beepSampleBuffer.Length >= sampleCount)
+                {
+                    samples = _beepSampleBuffer;
+                }
+                else
+                {
+                    // Allocate with some extra capacity for common durations
+                    int allocSize = Math.Max(sampleCount, BeepSampleRate / 5); // At least 200ms capacity
+                    samples = new float[allocSize];
+                    _beepSampleBuffer = samples;
+                    _beepBufferDurationMs = durationMs;
+                }
+
+                // Generate sine wave samples
+                int fadeSamples = BeepSampleRate / 100; // 10ms fade
                 for (int i = 0; i < sampleCount; i++)
                 {
                     // Generate sine wave
-                    double time = (double)i / sampleRate;
+                    double time = (double)i / BeepSampleRate;
                     samples[i] = (float)(Math.Sin(2 * Math.PI * frequencyHz * time) * 0.5);
 
-                    // Apply fade in/out to prevent clicks (10ms fade)
-                    int fadeSamples = sampleRate / 100; // 10ms
+                    // Apply fade in/out to prevent clicks
                     if (i < fadeSamples)
                         samples[i] *= (float)i / fadeSamples;
                     else if (i > sampleCount - fadeSamples)
                         samples[i] *= (float)(sampleCount - i) / fadeSamples;
                 }
 
-                // Create a sample provider from the buffer
-                var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 1);
-                var bufferProvider = new BufferSampleProvider(samples, waveFormat);
+                // Create a sample provider from the buffer (reads only sampleCount samples)
+                var waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(BeepSampleRate, 1);
+                var bufferProvider = new BufferSampleProvider(samples, sampleCount, waveFormat);
 
                 // Apply panning
                 var panningSample = new PanningSampleProvider(bufferProvider)
@@ -592,24 +612,32 @@ public class WindowsTtsService : ITtsService
 /// <summary>
 /// Simple sample provider that reads from a float buffer.
 /// Used for playing generated audio like beeps.
+/// Supports reading a subset of the buffer (Phase 2 optimization).
 /// </summary>
 internal class BufferSampleProvider : ISampleProvider
 {
     private readonly float[] _buffer;
+    private readonly int _sampleCount;
     private int _position;
 
     public WaveFormat WaveFormat { get; }
 
     public BufferSampleProvider(float[] buffer, WaveFormat waveFormat)
+        : this(buffer, buffer.Length, waveFormat)
+    {
+    }
+
+    public BufferSampleProvider(float[] buffer, int sampleCount, WaveFormat waveFormat)
     {
         _buffer = buffer;
+        _sampleCount = sampleCount;
         WaveFormat = waveFormat;
         _position = 0;
     }
 
     public int Read(float[] buffer, int offset, int count)
     {
-        int samplesAvailable = _buffer.Length - _position;
+        int samplesAvailable = _sampleCount - _position;
         int samplesToCopy = Math.Min(samplesAvailable, count);
 
         if (samplesToCopy > 0)
