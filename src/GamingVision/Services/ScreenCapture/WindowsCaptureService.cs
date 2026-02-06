@@ -644,25 +644,27 @@ public class WindowsCaptureService : IScreenCaptureService
         {
             int stride = width * 4;
             int size = stride * height;
-            var data = new byte[size];
 
-            // Copy row by row (handles pitch differences)
+            // Use pooled buffer to reduce GC pressure (returns ~8MB to pool on dispose)
+            var frame = CapturedFrame.CreatePooled(size, width, height, stride, frameId, captureStartTicks);
+            var data = frame.Data;
+
+            // Optimized copy: single block copy when row pitch matches stride (common case)
             var srcPtr = mappedResource.pData;
-            for (int row = 0; row < height; row++)
+            if (mappedResource.RowPitch == (uint)stride)
             {
-                Marshal.Copy(srcPtr + row * (int)mappedResource.RowPitch, data, row * stride, stride);
+                Marshal.Copy(srcPtr, data, 0, size);
+            }
+            else
+            {
+                // Row by row copy only when GPU adds padding
+                for (int row = 0; row < height; row++)
+                {
+                    Marshal.Copy(srcPtr + row * (int)mappedResource.RowPitch, data, row * stride, stride);
+                }
             }
 
-            return new CapturedFrame
-            {
-                Data = data,
-                Width = width,
-                Height = height,
-                Stride = stride,
-                Timestamp = DateTime.UtcNow,
-                FrameId = frameId,
-                CaptureStartTicks = captureStartTicks
-            };
+            return frame;
         }
         finally
         {

@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace GamingVision.Services.ScreenCapture;
 
 /// <summary>
@@ -41,14 +43,31 @@ public interface IScreenCaptureService : IDisposable
 }
 
 /// <summary>
-/// Represents a captured screen frame.
+/// Represents a captured screen frame with pooled buffer support to reduce GC pressure.
 /// </summary>
 public class CapturedFrame : IDisposable
 {
+    private byte[]? _data;
+    private bool _isPooled;
+
     /// <summary>
     /// Raw pixel data in BGRA format.
     /// </summary>
-    public byte[] Data { get; init; } = [];
+    public byte[] Data
+    {
+        get => _data ?? [];
+        init
+        {
+            _data = value;
+            DataLength = value?.Length ?? 0;
+            _isPooled = false;
+        }
+    }
+
+    /// <summary>
+    /// Actual length of valid data in the buffer (may be less than Data.Length for pooled buffers).
+    /// </summary>
+    public int DataLength { get; private set; }
 
     /// <summary>
     /// Width of the frame in pixels.
@@ -86,9 +105,60 @@ public class CapturedFrame : IDisposable
     /// </summary>
     public bool IsDisposed { get; private set; }
 
+    /// <summary>
+    /// Creates a CapturedFrame with a pooled buffer from ArrayPool.
+    /// The buffer will be returned to the pool on Dispose.
+    /// </summary>
+    public static CapturedFrame CreatePooled(int size, int width, int height, int stride,
+        ulong frameId = 0, long captureStartTicks = 0)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(size);
+        return new CapturedFrame(buffer, size, width, height, stride, frameId, captureStartTicks, isPooled: true);
+    }
+
+    /// <summary>
+    /// Creates a CapturedFrame with an existing non-pooled buffer (legacy support).
+    /// </summary>
+    public static CapturedFrame CreateUnpooled(byte[] data, int width, int height, int stride,
+        ulong frameId = 0, long captureStartTicks = 0)
+    {
+        return new CapturedFrame(data, data.Length, width, height, stride, frameId, captureStartTicks, isPooled: false);
+    }
+
+    private CapturedFrame(byte[] data, int dataLength, int width, int height, int stride,
+        ulong frameId, long captureStartTicks, bool isPooled)
+    {
+        _data = data;
+        DataLength = dataLength;
+        Width = width;
+        Height = height;
+        Stride = stride;
+        FrameId = frameId;
+        CaptureStartTicks = captureStartTicks;
+        _isPooled = isPooled;
+    }
+
+    /// <summary>
+    /// Parameterless constructor for legacy compatibility.
+    /// </summary>
+    public CapturedFrame()
+    {
+        _data = [];
+        _isPooled = false;
+    }
+
     public void Dispose()
     {
+        if (IsDisposed) return;
         IsDisposed = true;
+
+        // Return pooled buffer to ArrayPool
+        if (_isPooled && _data != null)
+        {
+            ArrayPool<byte>.Shared.Return(_data);
+            _data = null;
+        }
+
         GC.SuppressFinalize(this);
     }
 }

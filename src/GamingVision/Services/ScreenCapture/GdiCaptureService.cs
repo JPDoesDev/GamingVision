@@ -263,22 +263,16 @@ public class GdiCaptureService : IScreenCaptureService
             {
                 int stride = bitmapData.Stride;
                 int size = stride * bitmap.Height;
-                var data = new byte[size];
 
-                Marshal.Copy(bitmapData.Scan0, data, 0, size);
+                // Use pooled buffer to reduce GC pressure
+                var frame = CapturedFrame.CreatePooled(size, bitmap.Width, bitmap.Height, stride);
+                Marshal.Copy(bitmapData.Scan0, frame.Data, 0, size);
+
                 var copyMs = sw.ElapsedMilliseconds;
-
                 var totalMs = allocMs + captureMs + copyMs;
                 Logger.Log($"[PERF] Capture (PrintWindow): alloc={allocMs}ms, capture={captureMs}ms, copy={copyMs}ms, TOTAL={totalMs}ms | {width}x{height}");
 
-                return new CapturedFrame
-                {
-                    Data = data,
-                    Width = bitmap.Width,
-                    Height = bitmap.Height,
-                    Stride = stride,
-                    Timestamp = DateTime.UtcNow
-                };
+                return frame;
             }
             finally
             {
@@ -324,22 +318,14 @@ public class GdiCaptureService : IScreenCaptureService
             {
                 int stride = bitmapData.Stride;
                 int size = stride * bitmap.Height;
-                var data = new byte[size];
 
-                Marshal.Copy(bitmapData.Scan0, data, 0, size);
+                // Use pooled buffer to reduce GC pressure
+                var frame = CapturedFrame.CreatePooled(size, bitmap.Width, bitmap.Height, stride, frameId, captureStartTicks);
+                Marshal.Copy(bitmapData.Scan0, frame.Data, 0, size);
 
                 Logger.PerfFrameTimed(frameId, captureStartTicks, "CAPTURE", $"CPU copy complete ({bounds.Width}x{bounds.Height})");
 
-                return new CapturedFrame
-                {
-                    Data = data,
-                    Width = bitmap.Width,
-                    Height = bitmap.Height,
-                    Stride = stride,
-                    Timestamp = DateTime.UtcNow,
-                    FrameId = frameId,
-                    CaptureStartTicks = captureStartTicks
-                };
+                return frame;
             }
             finally
             {
