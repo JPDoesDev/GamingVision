@@ -51,6 +51,9 @@ public partial class LabelConfigurationViewModel : ObservableObject
     private bool _showAutoReadOption;
 
     [ObservableProperty]
+    private int _autoReadCooldown = 2000;
+
+    [ObservableProperty]
     private string _windowTitle = "Configure Labels";
 
     public LabelConfigurationViewModel(
@@ -58,13 +61,15 @@ public partial class LabelConfigurationViewModel : ObservableObject
         List<LabelDefinition> allLabels,
         List<string> currentlySelectedLabels,
         bool readLabelAloud,
-        bool? autoReadEnabled = null)
+        bool? autoReadEnabled = null,
+        int autoReadCooldown = 2000)
     {
         _tierName = tierName;
         _allLabels = allLabels;
         ReadLabelAloud = readLabelAloud;
         ShowAutoReadOption = autoReadEnabled.HasValue;
         AutoReadEnabled = autoReadEnabled ?? false;
+        AutoReadCooldown = autoReadCooldown;
         WindowTitle = $"Configure {tierName} Detection Labels";
 
         // Load currently selected labels in their priority order

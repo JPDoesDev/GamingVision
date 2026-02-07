@@ -9,7 +9,7 @@ namespace GamingVision.Services.ScreenCapture;
 /// </summary>
 public class ScreenCaptureManager : IDisposable
 {
-    private WindowsCaptureService? _captureService;
+    private DxgiCaptureService? _captureService;
     private GameProfile? _currentProfile;
     private bool _disposed;
     private IntPtr _currentWindowHandle;
@@ -66,7 +66,7 @@ public class ScreenCaptureManager : IDisposable
         _lastFrameTime = DateTime.MinValue;
 
         _captureService?.Dispose();
-        _captureService = new WindowsCaptureService();
+        _captureService = new DxgiCaptureService();
 
         // Set capture interval for 30 FPS target (33ms between frames)
         // This enables smooth overlay updates for object tracking

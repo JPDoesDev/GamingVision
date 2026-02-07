@@ -121,6 +121,16 @@
                           Visibility="{Binding ShowAutoReadOption, Converter={StaticResource BoolToVisibility}}"
                           AutomationProperties.Name="Enable Auto-Read"
                           AutomationProperties.HelpText="When enabled, primary labels will be read automatically when detected"/>
+                <StackPanel Orientation="Horizontal" Margin="5"
+                            Visibility="{Binding ShowAutoReadOption, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Auto-read Cooldown:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Slider Width="180" Minimum="500" Maximum="5000" Value="{Binding AutoReadCooldown}"
+                            TickFrequency="500" IsSnapToTickEnabled="True"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Auto-read Cooldown"
+                            AutomationProperties.HelpText="Minimum time between automatic reads of the same label"/>
+                    <TextBlock Text="{Binding AutoReadCooldown, StringFormat={}{0} ms}" Margin="10,0,0,0" Width="70" VerticalAlignment="Center"/>
+                </StackPanel>
                 <CheckBox Content="Read label name aloud when speaking"
                           IsChecked="{Binding ReadLabelAloud}"
                           Margin="5"

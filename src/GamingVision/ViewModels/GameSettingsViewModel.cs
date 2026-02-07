@@ -533,7 +533,8 @@ public partial class GameSettingsViewModel : ObservableObject
             _currentProfile.Labels,
             currentLabels,
             readLabelAloud,
-            autoReadEnabled);
+            autoReadEnabled,
+            AutoReadCooldown);
 
         var window = new Views.LabelConfigurationWindow(viewModel)
         {
@@ -550,6 +551,7 @@ public partial class GameSettingsViewModel : ObservableObject
                     _primaryLabelsList = newLabels;
                     ReadPrimaryLabelAloud = viewModel.ReadLabelAloud;
                     AutoReadEnabled = viewModel.AutoReadEnabled;
+                    AutoReadCooldown = viewModel.AutoReadCooldown;
                     break;
                 case "Secondary":
                     _secondaryLabelsList = newLabels;

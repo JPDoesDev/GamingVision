@@ -3,7 +3,7 @@
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
   "modelFile": "arc_raiders_model_v20260117_003735_640.onnx",
-  "windowTitle": "\uFEFF\uFEFFAR\uFEFFC R\u200Ba\uFEFF\uFEFF\u200B\uFEFF\uFEFF\u200B\u200B\u200B\uFEFFid\u200B\uFEFF\u200Be\u200B\uFEFF\u200Br\u200Bs",
+  "windowTitle": "A\u200BR\u200B\uFEFF\u200BC R\u200B\u200B\u200B\u200B\uFEFF\u200Ba\u200B\uFEFF\u200B\u200B\uFEFF\u200Bi\uFEFF\uFEFFde\uFEFF\u200Brs",
   "primaryLabels": [
     "interact",
     "inv-title",
@@ -119,7 +119,7 @@
     "quit": "Alt\u002BQ"
   },
   "capture": {
-    "method": "window",
+    "method": "fullscreen",
     "monitorIndex": 0,
     "captureCursor": false,
     "scaleFactor": 1,
@@ -140,14 +140,14 @@
   },
   "detection": {
     "autoReadCooldown": 2500,
-    "confidenceThreshold": 0.5,
+    "confidenceThreshold": 0.2,
     "autoReadConfidenceThreshold": 0.6,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
     "autoReadEnabled": true,
     "onlyReadChanges": true,
-    "readPrimaryLabelAloud": false,
+    "readPrimaryLabelAloud": true,
     "readSecondaryLabelAloud": false,
     "readTertiaryLabelAloud": false
   },
@@ -165,7 +165,7 @@
         "thickness": 10,
         "showLabel": false,
         "style": "highContrastBlack",
-        "confidenceThreshold": 0.1
+        "confidenceThreshold": 0.25
       },
       {
         "name": "Arc",
@@ -178,7 +178,7 @@
         "thickness": 10,
         "showLabel": false,
         "style": "outlined",
-        "confidenceThreshold": 0.05
+        "confidenceThreshold": 0.1
       }
     ]
   },
