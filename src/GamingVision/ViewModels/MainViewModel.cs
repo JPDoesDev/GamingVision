@@ -38,16 +38,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private volatile bool _overlayDispatchPending;
     private bool _disposed;
 
-    // Overlay fields
-    private OverlayWindow? _overlayWindow;
-    private OverlayRenderer? _overlayRenderer;
+    // Unified Direct2D overlay fields (handles both detection boxes and crosshair)
+    private Direct2DOverlayWindow? _overlayWindow;
+    private Direct2DRenderer? _overlayRenderer;
     private OverlayHotkeyService? _overlayHotkeyService;
     private bool _overlayVisible = true;
     private volatile bool _stoppingOverlay;
 
-    // Crosshair fields
-    private CrosshairWindow? _crosshairWindow;
-    private CrosshairRenderer? _crosshairRenderer;
+    // Crosshair fields (crosshair rendering is now part of _overlayRenderer)
     private CrosshairHotkeyService? _crosshairHotkeyService;
     private bool _crosshairVisible = true;
     private volatile bool _stoppingCrosshair;
@@ -1527,13 +1525,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Create callback for live crosshair preview updates
         Action<CrosshairSettings>? crosshairPreviewCallback = null;
-        if (crosshairWasRunning && _crosshairRenderer != null)
+        if (crosshairWasRunning && _overlayRenderer != null)
         {
             crosshairPreviewCallback = (settings) =>
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
-                    _crosshairRenderer?.UpdateSettings(settings);
+                    _overlayRenderer?.UpdateCrosshairSettings(settings);
+                    // Trigger re-render for live preview
+                    if (!IsOverlayRunning || !_overlayVisible)
+                    {
+                        _overlayRenderer?.Render(null);
+                    }
                 });
             };
         }
@@ -1567,7 +1570,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 var profile = GetSelectedGameProfile();
                 var settings = profile?.Crosshair ?? new CrosshairSettings();
-                _crosshairRenderer?.UpdateSettings(settings);
+                _overlayRenderer?.UpdateCrosshairSettings(settings);
+                if (!IsOverlayRunning || !_overlayVisible)
+                {
+                    _overlayRenderer?.Render(null);
+                }
             }
         }
 
@@ -1729,18 +1736,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var profile = GetSelectedGameProfile();
         if (profile == null) return;
 
-        // Create overlay window
-        _overlayWindow = new OverlayWindow();
-        _overlayRenderer = new OverlayRenderer(_overlayWindow.Canvas);
-
-        // Position on correct monitor (this calculates DPI scale)
         var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
-        _overlayWindow.PositionOverMonitor(monitorIndex);
-        _overlayWindow.Show();
 
-        // Pass DPI scale to renderer for correct coordinate conversion
-        // Must be done after Show() to ensure DPI is properly detected
-        _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
+        // If crosshair already created the D2D window, reuse it
+        if (_overlayWindow == null || _overlayRenderer == null)
+        {
+            _overlayWindow = new Direct2DOverlayWindow();
+            _overlayWindow.Create();
+            _overlayWindow.PositionOverMonitor(monitorIndex);
+
+            _overlayRenderer = new Direct2DRenderer();
+            _overlayRenderer.Initialize(
+                _overlayWindow.Handle,
+                _overlayWindow.PhysicalWidth,
+                _overlayWindow.PhysicalHeight);
+            _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
+
+            // Preserve crosshair state if it was already active
+            if (IsCrosshairRunning && _crosshairVisible)
+            {
+                var crosshairSettings = profile.Crosshair ?? new CrosshairSettings();
+                _overlayRenderer.UpdateCrosshairSettings(crosshairSettings);
+                _overlayRenderer.SetCrosshairVisible(true);
+            }
+
+            _overlayWindow.Show();
+        }
+
         Logger.Log($"Overlay DPI scale set to {_overlayWindow.DpiScale:F2} ({_overlayWindow.DpiScale * 100:F0}%)");
 
         // Register overlay hotkey
@@ -1767,15 +1789,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _overlayHotkeyService?.Dispose();
             _overlayHotkeyService = null;
 
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            // If crosshair is still active, keep the window/renderer alive
+            if (IsCrosshairRunning)
             {
-                _overlayWindow?.Close();
+                // Just clear detection boxes; crosshair redraws automatically
+                _overlayRenderer?.Clear();
+            }
+            else
+            {
+                // No other features using the window — tear down
+                _overlayRenderer?.Dispose();
+                _overlayRenderer = null;
+                _overlayWindow?.Dispose();
                 _overlayWindow = null;
-            });
+            }
 
-            _overlayRenderer = null;
             IsOverlayRunning = false;
-
             Logger.Log("Overlay disabled");
         }
         finally
@@ -1789,16 +1818,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             _overlayVisible = !_overlayVisible;
+
             if (_overlayWindow != null)
             {
-                if (_overlayVisible)
-                {
+                // Window stays visible if crosshair is still active
+                bool shouldShowWindow = _overlayVisible || _crosshairVisible;
+                if (shouldShowWindow)
                     _overlayWindow.Show();
-                }
                 else
-                {
                     _overlayWindow.Hide();
-                }
             }
         });
     }
@@ -1827,8 +1855,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        // Single batch draw call - much faster than individual DrawBox calls
-        _overlayRenderer.DrawAll(items, frameId, captureStartTicks);
+        // Single unified render call (detections + crosshair in one pass)
+        _overlayRenderer.Render(items, frameId, captureStartTicks);
     }
 
     [RelayCommand]
@@ -1939,21 +1967,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var profile = GetSelectedGameProfile();
         if (profile == null) return;
 
-        // Create crosshair window
-        _crosshairWindow = new CrosshairWindow();
-        _crosshairRenderer = new CrosshairRenderer(_crosshairWindow.Canvas);
-
-        // Position on correct monitor (matches overlay behavior)
-        var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
-        _crosshairWindow.PositionOverMonitor(monitorIndex);
-        _crosshairWindow.Show();
-
-        // Set DPI scale and draw crosshair
-        _crosshairRenderer.DpiScale = _crosshairWindow.DpiScale;
-
-        // Get crosshair settings (use defaults if not configured)
         var settings = profile.Crosshair ?? new CrosshairSettings();
-        _crosshairRenderer.UpdateSettings(settings);
+        var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
+
+        // If overlay already created the D2D window, just attach crosshair to it
+        if (_overlayRenderer != null)
+        {
+            _overlayRenderer.UpdateCrosshairSettings(settings);
+            _overlayRenderer.SetCrosshairVisible(true);
+        }
+        else
+        {
+            // No overlay running — create the window/renderer for crosshair alone
+            _overlayWindow = new Direct2DOverlayWindow();
+            _overlayWindow.Create();
+            _overlayWindow.PositionOverMonitor(monitorIndex);
+
+            _overlayRenderer = new Direct2DRenderer();
+            _overlayRenderer.Initialize(
+                _overlayWindow.Handle,
+                _overlayWindow.PhysicalWidth,
+                _overlayWindow.PhysicalHeight);
+            _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
+            _overlayRenderer.UpdateCrosshairSettings(settings);
+            _overlayRenderer.SetCrosshairVisible(true);
+
+            _overlayWindow.Show();
+
+            // Trigger initial render for the crosshair (no detections)
+            _overlayRenderer.Render(null);
+        }
 
         // Register crosshair hotkey
         var hotkey = CrosshairToggleHotkey;
@@ -1979,13 +2022,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _crosshairHotkeyService?.Dispose();
             _crosshairHotkeyService = null;
 
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            if (_overlayRenderer != null)
             {
-                _crosshairWindow?.Close();
-                _crosshairWindow = null;
-            });
+                _overlayRenderer.SetCrosshairVisible(false);
+                _overlayRenderer.UpdateCrosshairSettings(null);
 
-            _crosshairRenderer = null;
+                // If overlay detection is also not running, tear down everything
+                if (!IsOverlayRunning)
+                {
+                    _overlayRenderer.Dispose();
+                    _overlayRenderer = null;
+                    _overlayWindow?.Dispose();
+                    _overlayWindow = null;
+                }
+            }
+
+            _crosshairVisible = false;
             IsCrosshairRunning = false;
 
             Logger.Log("Crosshair disabled");
@@ -2001,15 +2053,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
         System.Windows.Application.Current?.Dispatcher.Invoke(() =>
         {
             _crosshairVisible = !_crosshairVisible;
-            if (_crosshairWindow != null)
+
+            if (_overlayRenderer != null)
             {
-                if (_crosshairVisible)
+                _overlayRenderer.SetCrosshairVisible(_crosshairVisible);
+
+                // Update window visibility
+                bool shouldShowWindow = _overlayVisible || _crosshairVisible;
+                if (_overlayWindow != null)
                 {
-                    _crosshairWindow.Show();
+                    if (shouldShowWindow)
+                        _overlayWindow.Show();
+                    else
+                        _overlayWindow.Hide();
                 }
-                else
+
+                // Trigger re-render if detection pipeline is not actively driving frames
+                if (!IsOverlayRunning || !_overlayVisible)
                 {
-                    _crosshairWindow.Hide();
+                    _overlayRenderer.Render(null);
                 }
             }
         });
@@ -2021,11 +2083,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public void RefreshCrosshair()
     {
-        if (!IsCrosshairRunning || _crosshairRenderer == null) return;
+        if (!IsCrosshairRunning || _overlayRenderer == null) return;
 
         var profile = GetSelectedGameProfile();
         var settings = profile?.Crosshair ?? new CrosshairSettings();
-        _crosshairRenderer.UpdateSettings(settings);
+        _overlayRenderer.UpdateCrosshairSettings(settings);
+
+        // Trigger re-render if detection pipeline is not actively driving frames
+        if (!IsOverlayRunning || !_overlayVisible)
+        {
+            _overlayRenderer.Render(null);
+        }
     }
 
     #endregion
@@ -2723,11 +2791,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _ocrService?.Dispose();
         _ttsService?.Dispose();
 
-        // Clean up overlay resources
+        // Clean up overlay / crosshair resources
         _overlayHotkeyService?.Dispose();
-
-        // Clean up crosshair resources
         _crosshairHotkeyService?.Dispose();
+        _overlayRenderer?.Dispose();
+        _overlayWindow?.Dispose();
 
         GC.SuppressFinalize(this);
     }

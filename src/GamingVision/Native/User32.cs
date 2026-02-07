@@ -75,11 +75,76 @@ public static class User32
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
+    // Window creation
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern ushort RegisterClassEx(ref WNDCLASSEX lpwcx);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr CreateWindowEx(
+        uint dwExStyle, string lpClassName, string lpWindowName, uint dwStyle,
+        int x, int y, int nWidth, int nHeight,
+        IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool DestroyWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    public const uint LWA_ALPHA = 0x00000002;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr DefWindowProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr GetModuleHandle(string? lpModuleName);
+
+    public delegate IntPtr WndProcDelegate(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    // Window styles
+    public const uint WS_POPUP = 0x80000000;
+    public const uint WS_EX_TOPMOST = 0x00000008;
+    public const uint WS_EX_NOACTIVATE = 0x08000000;
+
+    // ShowWindow commands
+    public const int SW_SHOW = 5;
+    public const int SW_HIDE = 0;
+
+    // SetWindowPos constants
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public const uint SWP_NOACTIVATE = 0x0010;
+    public const uint SWP_SHOWWINDOW = 0x0040;
+
     // Extended window styles for click-through overlay
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TRANSPARENT = 0x00000020;
     public const int WS_EX_LAYERED = 0x00080000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct WNDCLASSEX
+    {
+        public uint cbSize;
+        public uint style;
+        [MarshalAs(UnmanagedType.FunctionPtr)]
+        public WndProcDelegate lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+        public IntPtr hIconSm;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

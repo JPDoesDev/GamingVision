@@ -37,6 +37,10 @@
 
     <!-- WMI for GPU detection -->
     <PackageReference Include="System.Management" Version="10.0.0" />
+
+    <!-- Direct2D overlay rendering via Vortice.Windows -->
+    <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.2" />
   </ItemGroup>
 
   <ItemGroup>
