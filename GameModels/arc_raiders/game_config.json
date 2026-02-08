@@ -2,7 +2,7 @@
   "configVersion": "0.2.4",
   "gameId": "arc_raiders",
   "displayName": "ARC Raiders",
-  "modelFile": "arc_raiders_model_v20260117_003735_640.onnx",
+  "modelFile": "arc_raiders_model_v20260207_220402_640.onnx",
   "windowTitle": "A\u200BR\u200B\uFEFF\u200BC R\u200B\u200B\u200B\u200B\uFEFF\u200Ba\u200B\uFEFF\u200B\u200B\uFEFF\u200Bi\uFEFF\uFEFFde\uFEFF\u200Brs",
   "primaryLabels": [
     "interact",
@@ -10,7 +10,18 @@
     "quick_menu",
     "st-title",
     "hud-notification",
-    "map-title"
+    "map-title",
+    "map-info",
+    "hud-hp",
+    "hud-timeleft",
+    "arc-flying",
+    "arc-walking",
+    "hud-serial",
+    "inv-tags",
+    "inv-stats",
+    "hud-player",
+    "control",
+    "arc-rolling"
   ],
   "secondaryLabels": [
     "inv-info",
@@ -141,13 +152,13 @@
   "detection": {
     "autoReadCooldown": 2500,
     "confidenceThreshold": 0.2,
-    "autoReadConfidenceThreshold": 0.6,
+    "autoReadConfidenceThreshold": 0.4,
     "nmsThreshold": 0.45,
     "maxDetections": 100,
     "targetFps": 10,
     "autoReadEnabled": true,
     "onlyReadChanges": true,
-    "readPrimaryLabelAloud": true,
+    "readPrimaryLabelAloud": false,
     "readSecondaryLabelAloud": false,
     "readTertiaryLabelAloud": false
   },
@@ -189,13 +200,13 @@
     "captureHotkey": "F1",
     "annotationConfidenceThreshold": 0.2,
     "trainingParameters": {
-      "epochs": 200,
+      "epochs": 150,
       "imageSize": 1440,
-      "batch": 0.8,
+      "batch": 0.85,
       "patience": 50,
       "learningRate": 0.01,
       "device": "cuda",
-      "workers": 9,
+      "workers": 8,
       "cacheImages": true,
       "useMixedPrecision": true
     }

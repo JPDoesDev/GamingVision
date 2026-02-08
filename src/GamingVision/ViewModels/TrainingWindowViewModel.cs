@@ -200,11 +200,16 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
             // Check CUDA 13.0
             await CheckCuda130Async();
 
+            // Fetch pip list once for PyTorch + package checks
+            var pipPackages = PythonCheckPassed
+                ? await _pythonService.GetPipListAsync()
+                : new Dictionary<string, string>();
+
             // Check PyTorch with CUDA
-            await CheckPyTorchAsync();
+            CheckPyTorch(pipPackages);
 
             // Check required packages
-            await CheckRequiredPackagesAsync();
+            await CheckRequiredPackagesAsync(pipPackages);
 
             // Determine if all prerequisites are met
             AllPrerequisitesMet = PythonCheckPassed && CudaCheckPassed && PytorchCheckPassed && PackagesCheckPassed;
@@ -289,7 +294,7 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task CheckPyTorchAsync()
+    private void CheckPyTorch(Dictionary<string, string> pipPackages)
     {
         if (!PythonCheckPassed)
         {
@@ -299,7 +304,7 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var (available, hasCuda, torchVersion, cudaVersion) = await _pythonService.DetectPyTorchAsync();
+        var (available, hasCuda, torchVersion, cudaVersion) = _pythonService.DetectPyTorch(pipPackages);
 
         if (available && hasCuda)
         {
@@ -321,7 +326,7 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task CheckRequiredPackagesAsync()
+    private async Task CheckRequiredPackagesAsync(Dictionary<string, string> pipPackages)
     {
         if (!PythonCheckPassed)
         {
@@ -336,7 +341,7 @@ public partial class TrainingWindowViewModel : ObservableObject, IDisposable
 
         foreach (var package in requiredPackages)
         {
-            var (installed, _) = await _pythonService.CheckPackageAsync(package);
+            var (installed, _) = _pythonService.CheckPackage(pipPackages, package);
             if (!installed)
             {
                 missing.Add(package);

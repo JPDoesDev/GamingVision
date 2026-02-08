@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -58,26 +59,29 @@ public class PythonService : IDisposable
             if (process == null)
                 return (false, "Failed to start python", string.Empty);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try
-            {
-                var output = await process.StandardOutput.ReadToEndAsync(cts.Token);
-                var error = await process.StandardError.ReadToEndAsync(cts.Token);
-                await process.WaitForExitAsync(cts.Token);
+            // Read both streams concurrently to avoid pipe buffer deadlock.
+            // Don't pass CancellationToken — pipe reads aren't cancellable on Windows.
+            // Instead, kill the process on timeout which closes pipes and unblocks reads.
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            var exitTask = process.WaitForExitAsync();
 
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-                {
-                    var version = output.Trim();
-                    return (true, version, "python");
-                }
-
-                return (false, error.Trim(), string.Empty);
-            }
-            catch (OperationCanceledException)
+            if (await Task.WhenAny(exitTask, Task.Delay(5000)) != exitTask)
             {
-                process.Kill();
+                try { process.Kill(); } catch { }
                 return (false, "Timeout", string.Empty);
             }
+
+            var output = await outputTask;
+            var error = await errorTask;
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                var version = output.Trim();
+                return (true, version, "python");
+            }
+
+            return (false, error.Trim(), string.Empty);
         }
         catch (Exception ex)
         {
@@ -108,44 +112,44 @@ public class PythonService : IDisposable
             if (process == null)
                 return (false, "Failed to run nvcc", false);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try
-            {
-                var output = await process.StandardOutput.ReadToEndAsync(cts.Token);
-                await process.WaitForExitAsync(cts.Token);
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            var exitTask = process.WaitForExitAsync();
 
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            if (await Task.WhenAny(exitTask, Task.Delay(5000)) != exitTask)
+            {
+                try { process.Kill(); } catch { }
+                return (false, "Timeout", false);
+            }
+
+            var output = await outputTask;
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                // Parse version from output like "Cuda compilation tools, release 13.0, V13.0.48"
+                var lines = output.Split('\n');
+                foreach (var line in lines)
                 {
-                    // Parse version from output like "Cuda compilation tools, release 13.0, V13.0.48"
-                    var lines = output.Split('\n');
-                    foreach (var line in lines)
+                    if (line.Contains("release"))
                     {
-                        if (line.Contains("release"))
+                        var idx = line.IndexOf("release");
+                        if (idx >= 0)
                         {
-                            var idx = line.IndexOf("release");
-                            if (idx >= 0)
+                            var versionPart = line.Substring(idx);
+                            // Check if it's CUDA 13.0
+                            var isCorrect = versionPart.Contains("13.0");
+                            var parts = versionPart.Split(',');
+                            if (parts.Length > 0)
                             {
-                                var versionPart = line.Substring(idx);
-                                // Check if it's CUDA 13.0
-                                var isCorrect = versionPart.Contains("13.0");
-                                var parts = versionPart.Split(',');
-                                if (parts.Length > 0)
-                                {
-                                    return (true, parts[0].Trim(), isCorrect);
-                                }
+                                return (true, parts[0].Trim(), isCorrect);
                             }
                         }
                     }
-                    return (true, "CUDA installed (version unknown)", false);
                 }
+                return (true, "CUDA installed (version unknown)", false);
+            }
 
-                return (false, "CUDA toolkit not found", false);
-            }
-            catch (OperationCanceledException)
-            {
-                process.Kill();
-                return (false, "Timeout", false);
-            }
+            return (false, "CUDA toolkit not found", false);
         }
         catch (Exception ex)
         {
@@ -155,17 +159,17 @@ public class PythonService : IDisposable
     }
 
     /// <summary>
-    /// Checks if PyTorch is installed with CUDA support.
+    /// Runs "pip list" and returns a dictionary of installed package names (lowercase) to versions.
     /// </summary>
-    /// <returns>Tuple of (available, hasCuda, torchVersion, cudaVersion)</returns>
-    public async Task<(bool Available, bool HasCuda, string TorchVersion, string CudaVersion)> DetectPyTorchAsync()
+    public async Task<Dictionary<string, string>> GetPipListAsync()
     {
+        var packages = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "python",
-                Arguments = "-c \"import torch; v=torch.version.cuda if torch.cuda.is_available() else 'N/A'; print(f'{torch.__version__}|{torch.cuda.is_available()}|{v}')\"",
+                FileName = "pip",
+                Arguments = "list --format=freeze",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -174,110 +178,87 @@ public class PythonService : IDisposable
 
             using var process = Process.Start(psi);
             if (process == null)
-                return (false, false, "Check failed", "N/A");
+                return packages;
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            try
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            var exitTask = process.WaitForExitAsync();
+
+            if (await Task.WhenAny(exitTask, Task.Delay(10000)) != exitTask)
             {
-                var output = await process.StandardOutput.ReadToEndAsync(cts.Token);
-                var error = await process.StandardError.ReadToEndAsync(cts.Token);
-                await process.WaitForExitAsync(cts.Token);
-
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-                {
-                    var parts = output.Trim().Split('|');
-                    if (parts.Length >= 3)
-                    {
-                        var version = parts[0];
-                        var hasCuda = parts[1].Equals("True", StringComparison.OrdinalIgnoreCase);
-                        var cudaVersion = parts[2];
-                        return (true, hasCuda, version, cudaVersion);
-                    }
-                }
-
-                if (error.Contains("ModuleNotFoundError") || error.Contains("No module named"))
-                {
-                    return (false, false, "Not installed", "N/A");
-                }
-
-                return (false, false, "Check failed", "N/A");
+                try { process.Kill(); } catch { }
+                Logger.Log("pip list timed out");
+                return packages;
             }
-            catch (OperationCanceledException)
+
+            var output = await outputTask;
+
+            // Format: package==version (one per line)
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
-                process.Kill();
-                return (false, false, "Timeout", "N/A");
+                var trimmed = line.Trim();
+                var eqIdx = trimmed.IndexOf("==");
+                if (eqIdx > 0)
+                {
+                    var name = trimmed.Substring(0, eqIdx).Trim();
+                    var version = trimmed.Substring(eqIdx + 2).Trim();
+                    packages[name] = version;
+                }
             }
         }
         catch (Exception ex)
         {
-            Logger.Log($"PyTorch detection failed: {ex.Message}");
-            return (false, false, "Check failed", "N/A");
+            Logger.Log($"pip list failed: {ex.Message}");
         }
+
+        return packages;
     }
 
     /// <summary>
-    /// Checks if a Python package is installed by attempting to import it.
+    /// Checks if PyTorch is installed with CUDA support using pip list output.
+    /// CUDA builds have "+cuXXX" in the version string (e.g. "2.5.0+cu130").
     /// </summary>
-    /// <param name="packageName">Name of the package to check</param>
-    /// <returns>Tuple of (installed, version)</returns>
-    public async Task<(bool Installed, string Version)> CheckPackageAsync(string packageName)
+    public (bool Available, bool HasCuda, string TorchVersion, string CudaVersion) DetectPyTorch(
+        Dictionary<string, string> pipPackages)
     {
-        try
+        if (!pipPackages.TryGetValue("torch", out var torchVersion))
+            return (false, false, "Not installed", "N/A");
+
+        // CUDA builds include "+cuXXX" in the version, e.g. "2.5.0+cu130"
+        var hasCuda = torchVersion.Contains("+cu");
+        var cudaVersion = "N/A";
+
+        if (hasCuda)
         {
-            // Map package names to import names (some differ)
-            var importName = packageName.ToLowerInvariant() switch
-            {
-                "mlabelimg" => "labelImg",
-                "pyyaml" => "yaml",
-                "pillow" => "PIL",
-                _ => packageName
-            };
-
-            // Try to import and get version
-            var versionAttr = packageName.ToLowerInvariant() switch
-            {
-                "pyyaml" => "yaml.__version__",
-                "pillow" => "PIL.__version__",
-                "mlabelimg" => "'installed'",  // labelImg doesn't have __version__
-                _ => $"{importName}.__version__"
-            };
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "python",
-                Arguments = $"-c \"import {importName}; print({versionAttr})\"",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(psi);
-            if (process == null)
-                return (false, "Check failed");
-
-            // Wait for process with timeout
-            var completed = process.WaitForExit(5000);
-            if (!completed)
-            {
-                process.Kill();
-                return (false, "Timeout");
-            }
-
-            if (process.ExitCode == 0)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                var version = output.Trim();
-                return (true, string.IsNullOrEmpty(version) ? "installed" : version);
-            }
-
-            return (false, "Not installed");
+            var cuIdx = torchVersion.IndexOf("+cu");
+            var cuPart = torchVersion.Substring(cuIdx + 3); // e.g. "130"
+            // Format as dotted version: "130" -> "13.0"
+            if (cuPart.Length >= 2)
+                cudaVersion = cuPart.Insert(cuPart.Length - 1, ".");
         }
-        catch (Exception ex)
+
+        return (true, hasCuda, torchVersion, cudaVersion);
+    }
+
+    /// <summary>
+    /// Checks if a Python package is installed using pip list output.
+    /// </summary>
+    public (bool Installed, string Version) CheckPackage(
+        Dictionary<string, string> pipPackages, string packageName)
+    {
+        // Map pip package names for lookup (pip list uses the pip name, not import name)
+        var pipName = packageName.ToLowerInvariant() switch
         {
-            Logger.Log($"Package check for {packageName} failed: {ex.Message}");
-            return (false, "Check failed");
-        }
+            "pyyaml" => "PyYAML",
+            "pillow" => "Pillow",
+            "mlabelimg" => "mlabelImg",
+            _ => packageName
+        };
+
+        if (pipPackages.TryGetValue(pipName, out var version))
+            return (true, version);
+
+        return (false, "Not installed");
     }
 
     /// <summary>
