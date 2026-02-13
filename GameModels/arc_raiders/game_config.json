@@ -10,18 +10,7 @@
     "quick_menu",
     "st-title",
     "hud-notification",
-    "map-title",
-    "map-info",
-    "hud-hp",
-    "hud-timeleft",
-    "arc-flying",
-    "arc-walking",
-    "hud-serial",
-    "inv-tags",
-    "inv-stats",
-    "hud-player",
-    "control",
-    "arc-rolling"
+    "map-title"
   ],
   "secondaryLabels": [
     "inv-info",
