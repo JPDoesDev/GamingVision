@@ -1350,6 +1350,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // Cooldown tracking for auto-read (Stopwatch ticks)
     private long _lastAutoReadTicks;
 
+    // Deduplication: track the last-read item (text + approximate position)
+    // Prevents re-reading the same popup while allowing re-read after moving away and back.
+    private string? _lastAutoReadText;
+    private float _lastAutoReadCenterX;
+    private float _lastAutoReadCenterY;
+
+    // Proximity threshold as fraction of frame dimension (e.g., 0.05 = 5%)
+    private const float AutoReadProximityThreshold = 0.03f;
+
     private async void OnPrimaryObjectChanged(object? sender, PrimaryObjectChangedEventArgs e)
     {
         if (e.Detections.Count == 0)
@@ -1399,6 +1408,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
             {
+                // Deduplication: skip if same text at approximately the same position
+                if (_lastAutoReadText == text)
+                {
+                    float thresholdX = frame.Width * AutoReadProximityThreshold;
+                    float thresholdY = frame.Height * AutoReadProximityThreshold;
+                    float dx = MathF.Abs(detection.CenterX - _lastAutoReadCenterX);
+                    float dy = MathF.Abs(detection.CenterY - _lastAutoReadCenterY);
+
+                    if (dx < thresholdX && dy < thresholdY)
+                    {
+                        // Same item still under cursor — don't re-read
+                        return;
+                    }
+                }
+
                 var displayText = $"{detection.Label}: {text}";
                 var speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
 
@@ -1406,8 +1430,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: false);
 
-                // Update cooldown timestamp after successful speech
+                // Update last-read state after successful speech
                 _lastAutoReadTicks = Stopwatch.GetTimestamp();
+                _lastAutoReadText = text;
+                _lastAutoReadCenterX = detection.CenterX;
+                _lastAutoReadCenterY = detection.CenterY;
 
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
@@ -1602,6 +1629,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             System.Diagnostics.Debug.WriteLine("TTS service initialized");
         }
+
+        // Reset auto-read state so first detection after enable always reads
+        _lastAutoReadTicks = 0;
+        _lastAutoReadText = null;
 
         // Subscribe to detection events for TTS auto-read
         if (_detectionManager != null)
