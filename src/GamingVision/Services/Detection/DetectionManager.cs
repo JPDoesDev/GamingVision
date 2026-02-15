@@ -16,30 +16,16 @@ public class DetectionManager : IDisposable
     private bool _disposed;
     private List<DetectedObject> _lastDetections = [];
     private readonly object _detectionLock = new();
-
-    // Position tracking for auto-read (replaces cooldown-based approach)
-    private readonly Dictionary<string, TrackedPosition> _previousPositions = new();
     private int _lastFrameWidth;
     private int _lastFrameHeight;
-    private const float PositionChangeThreshold = 0.10f; // 10% position change triggers re-read
 
-    // Tracking for label disappearance detection
-    private readonly Dictionary<string, int> _framesSinceLastSeen = new();
-    private readonly Dictionary<string, DetectedObject> _trackedObjects = new();
-    private const int DefaultDisappearanceFrameThreshold = 5;
-
-    // Reusable lists to avoid per-frame allocations (Phase 1 optimization)
+    // Reusable lists to avoid per-frame allocations
     private readonly List<DetectedObject> _primaryDetectionsBuffer = new();
     private readonly List<DetectedObject> _secondaryDetectionsBuffer = new();
     private readonly List<DetectedObject> _tertiaryDetectionsBuffer = new();
     private readonly List<DetectedObject> _autoReadPrimaryBuffer = new();
-    private readonly List<DetectedObject> _detectionsToReadBuffer = new();
-    private readonly Dictionary<string, TrackedPosition> _currentPositionsBuffer = new();
-    private readonly HashSet<string> _previousLabelsBuffer = new();
-    private readonly HashSet<string> _currentLabelsBuffer = new();
-    private readonly HashSet<string> _disappearanceCheckBuffer = new();
 
-    // Priority lookup dictionary for O(1) label priority lookups (Phase 2 optimization)
+    // Priority lookup dictionary for O(1) label priority lookups
     private Dictionary<string, int>? _priorityLookup;
 
     /// <summary>
@@ -58,15 +44,10 @@ public class DetectionManager : IDisposable
     public event EventHandler<DetectionEventArgs>? DetectionsReady;
 
     /// <summary>
-    /// Event raised when primary objects change (for auto-read).
+    /// Event raised when auto-read eligible primary detections are found.
+    /// Fires every frame that has eligible detections; cooldown is handled by the consumer.
     /// </summary>
     public event EventHandler<PrimaryObjectChangedEventArgs>? PrimaryObjectChanged;
-
-    /// <summary>
-    /// Event raised when a tracked label disappears (not detected for several frames).
-    /// Used to cancel ongoing TTS reads when user moves away from an object.
-    /// </summary>
-    public event EventHandler<LabelDisappearedEventArgs>? LabelDisappeared;
 
     public DetectionManager()
     {
@@ -81,21 +62,17 @@ public class DetectionManager : IDisposable
     /// <summary>
     /// Initializes the detection manager for a game profile.
     /// </summary>
-    /// <param name="profile">The game profile containing model path and settings.</param>
-    /// <param name="modelsDirectory">Base directory for model files.</param>
-    /// <returns>True if initialization succeeded.</returns>
     public async Task<bool> InitializeAsync(GameProfile profile, string modelsDirectory)
     {
         _currentProfile = profile;
 
-        // Build priority lookup dictionary for O(1) lookups during sorting (Phase 2 optimization)
+        // Build priority lookup dictionary for O(1) lookups during sorting
         _priorityLookup = new Dictionary<string, int>(profile.LabelPriority.Count);
         for (int i = 0; i < profile.LabelPriority.Count; i++)
         {
             _priorityLookup[profile.LabelPriority[i]] = i;
         }
 
-        // Build model path
         var modelPath = Path.Combine(modelsDirectory, profile.ModelFile);
 
         if (!File.Exists(modelPath))
@@ -104,15 +81,12 @@ public class DetectionManager : IDisposable
             return false;
         }
 
-        // Initialize detection service
         return await _detectionService.InitializeAsync(modelPath, useGpu: true);
     }
 
     /// <summary>
     /// Processes a captured frame and runs detection.
     /// </summary>
-    /// <param name="frame">The captured frame to process.</param>
-    /// <returns>List of detections, or empty list if detection is on cooldown.</returns>
     public async Task<List<DetectedObject>> ProcessFrameAsync(CapturedFrame frame)
     {
         if (!_detectionService.IsReady || _currentProfile == null)
@@ -121,66 +95,45 @@ public class DetectionManager : IDisposable
             return [];
         }
 
-        // Use the lower manual read threshold for detection to capture all potential objects
-        // Auto-read will filter more strictly, manual reads will use these results
         var threshold = _currentProfile.Detection.ConfidenceThreshold;
         var detections = await _detectionService.DetectAsync(frame, threshold);
 
         // DetectAsync returns null when inference was skipped (already running)
-        // Only update stored detections when inference actually ran
         if (detections == null)
-        {
-            // Inference was skipped, don't overwrite previous detections
             return [];
-        }
 
-        // Store and process detections (inference actually ran)
-        Logger.Log($"ProcessFrameAsync: DetectAsync returned {detections.Count} detections, calling ProcessDetections");
         ProcessDetections(detections, frame.Width, frame.Height);
-
         return detections;
     }
 
     /// <summary>
-    /// Processes detections to determine if primary objects changed.
-    /// Uses position-based change detection instead of cooldown.
+    /// Processes detections: categorizes into tiers, fires events.
     /// </summary>
     private void ProcessDetections(List<DetectedObject> detections, int frameWidth, int frameHeight)
     {
-        if (_currentProfile == null)
-        {
-            Logger.Warn("ProcessDetections: _currentProfile is null, returning");
-            return;
-        }
+        if (_currentProfile == null) return;
 
-        Logger.Log($"ProcessDetections: Storing {detections.Count} detections in _lastDetections");
         lock (_detectionLock)
         {
-            // Check if any tracked labels have disappeared (for TTS cancellation)
-            CheckTrackedLabelsDisappearance(detections);
-
             // Clear reusable buffers
             _primaryDetectionsBuffer.Clear();
             _secondaryDetectionsBuffer.Clear();
             _tertiaryDetectionsBuffer.Clear();
             _autoReadPrimaryBuffer.Clear();
-            _currentPositionsBuffer.Clear();
 
-            // Get thresholds and waypoint config once
             var autoReadThreshold = _currentProfile.Detection.AutoReadConfidenceThreshold;
             var waypointLabel = _currentProfile.Waypoint?.Enabled == true
                 ? _currentProfile.Waypoint.Label
                 : null;
 
-            // SINGLE-PASS filtering: categorize all detections in one iteration
-            // This replaces 4 separate LINQ chains (saves 0.5-2ms + allocations)
+            // Single-pass filtering into tiers
             foreach (var d in detections)
             {
                 if (_currentProfile.PrimaryLabels.Contains(d.Label))
                 {
                     _primaryDetectionsBuffer.Add(d);
 
-                    // Also check for auto-read eligibility
+                    // Auto-read eligible: primary label, above threshold, not the waypoint label
                     if (d.Confidence >= autoReadThreshold &&
                         (string.IsNullOrEmpty(waypointLabel) || d.Label != waypointLabel))
                     {
@@ -197,8 +150,7 @@ public class DetectionManager : IDisposable
                 }
             }
 
-            // Raise detection event with direct buffer references
-            // Event handlers should not modify these lists (Phase 2 optimization - avoid ToList() copies)
+            // Raise detection event (used by overlay)
             DetectionsReady?.Invoke(this, new DetectionEventArgs
             {
                 AllDetections = detections,
@@ -208,118 +160,40 @@ public class DetectionManager : IDisposable
                 Timestamp = DateTime.UtcNow
             });
 
-            // Position-based auto-read: detect new labels or significant position changes
-            // Use reusable buffer (Phase 2 optimization)
-            _detectionsToReadBuffer.Clear();
-
-            // Build current positions map (use highest confidence detection per label)
-            // Sort descending by confidence, then take first per label
-            foreach (var det in _autoReadPrimaryBuffer.OrderByDescending(d => d.Confidence))
+            // Fire auto-read event if there are eligible primary detections
+            if (_autoReadPrimaryBuffer.Count > 0)
             {
-                if (!_currentPositionsBuffer.ContainsKey(det.Label))
-                {
-                    _currentPositionsBuffer[det.Label] = new TrackedPosition
-                    {
-                        Label = det.Label,
-                        CenterX = det.CenterX,
-                        CenterY = det.CenterY,
-                        FrameWidth = frameWidth,
-                        FrameHeight = frameHeight
-                    };
-                }
-            }
-
-            // Build label sets using reusable buffers
-            _previousLabelsBuffer.Clear();
-            _currentLabelsBuffer.Clear();
-            foreach (var key in _previousPositions.Keys)
-                _previousLabelsBuffer.Add(key);
-            foreach (var key in _currentPositionsBuffer.Keys)
-                _currentLabelsBuffer.Add(key);
-
-            var previousLabels = _previousLabelsBuffer;
-            var currentLabels = _currentLabelsBuffer;
-            var currentPositions = _currentPositionsBuffer;
-
-            // Case 1: NEW labels that weren't in previous frame
-            // Case 2: EXISTING labels with significant position change
-            // Combined into single loop to avoid LINQ Except/Intersect allocations
-            foreach (var label in currentLabels)
-            {
-                if (!previousLabels.Contains(label))
-                {
-                    // NEW label
-                    var det = _autoReadPrimaryBuffer.FirstOrDefault(d => d.Label == label);
-                    if (det != null)
-                    {
-                        _detectionsToReadBuffer.Add(det);
-                        Logger.Log($"AutoRead: New label appeared: {label}");
-                    }
-                }
-                else
-                {
-                    // EXISTING label - check for significant position change
-                    var prevPos = _previousPositions[label];
-                    var currPos = currentPositions[label];
-
-                    if (currPos.HasMovedSignificantly(prevPos, PositionChangeThreshold))
-                    {
-                        var det = _autoReadPrimaryBuffer.FirstOrDefault(d => d.Label == label);
-                        if (det != null)
-                        {
-                            _detectionsToReadBuffer.Add(det);
-                            Logger.Log($"AutoRead: Label position changed significantly: {label}");
-                        }
-                    }
-                }
-            }
-
-            // Fire event if there are detections to read
-            if (_detectionsToReadBuffer.Count > 0)
-            {
-                var sortedDetections = SortByPriority(_detectionsToReadBuffer, _currentProfile.LabelPriority);
+                var sorted = SortByPriority(_autoReadPrimaryBuffer, _currentProfile.LabelPriority);
 
                 PrimaryObjectChanged?.Invoke(this, new PrimaryObjectChangedEventArgs
                 {
-                    Detections = sortedDetections,
+                    Detections = sorted,
                     Timestamp = DateTime.UtcNow
                 });
-            }
-
-            // Update tracked positions for next frame
-            _previousPositions.Clear();
-            foreach (var kvp in currentPositions)
-            {
-                _previousPositions[kvp.Key] = kvp.Value;
             }
 
             _lastFrameWidth = frameWidth;
             _lastFrameHeight = frameHeight;
             _lastDetections = detections;
-            Logger.LogDebug($"ProcessDetections: Stored {detections.Count} detections in _lastDetections");
         }
     }
 
     /// <summary>
     /// Sorts detections by label priority using pre-built lookup dictionary.
-    /// Uses List.Sort() to avoid LINQ allocations (Phase 2 optimization).
     /// </summary>
     private List<DetectedObject> SortByPriority(List<DetectedObject> detections, List<string> priorityOrder)
     {
         if (detections.Count <= 1)
             return detections;
 
-        // Use pre-built lookup dictionary for O(1) priority lookups
         var lookup = _priorityLookup;
         if (lookup == null || lookup.Count == 0)
         {
-            // Fallback if lookup not built (shouldn't happen after InitializeAsync)
             return detections.OrderBy(d => priorityOrder.IndexOf(d.Label) is var idx && idx >= 0 ? idx : int.MaxValue)
                 .ThenByDescending(d => d.Confidence)
                 .ToList();
         }
 
-        // Sort in-place using comparison delegate (avoids LINQ allocations)
         detections.Sort((a, b) =>
         {
             int priorityA = lookup.TryGetValue(a.Label, out var pa) ? pa : int.MaxValue;
@@ -329,7 +203,6 @@ public class DetectionManager : IDisposable
             if (priorityCompare != 0)
                 return priorityCompare;
 
-            // Higher confidence first (descending)
             return b.Confidence.CompareTo(a.Confidence);
         });
 
@@ -362,25 +235,11 @@ public class DetectionManager : IDisposable
     /// </summary>
     public List<DetectedObject> GetCurrentPrimaryDetections()
     {
-        if (_currentProfile == null)
-        {
-            Logger.Warn("GetCurrentPrimaryDetections: No current profile");
-            return [];
-        }
+        if (_currentProfile == null) return [];
 
         lock (_detectionLock)
         {
-            Logger.Log($"GetCurrentPrimaryDetections: _lastDetections count = {_lastDetections.Count}");
-            if (_lastDetections.Count > 0)
-            {
-                var labels = string.Join(", ", _lastDetections.Select(d => $"{d.Label}({d.Confidence:F2})"));
-                Logger.Log($"GetCurrentPrimaryDetections: Detection labels = [{labels}]");
-            }
-            Logger.Log($"GetCurrentPrimaryDetections: PrimaryLabels = [{string.Join(", ", _currentProfile.PrimaryLabels)}]");
-
             var filtered = _lastDetections.Where(d => _currentProfile.PrimaryLabels.Contains(d.Label)).ToList();
-            Logger.Log($"GetCurrentPrimaryDetections: After filtering = {filtered.Count} detections");
-
             return SortByPriority(filtered, _currentProfile.LabelPriority);
         }
     }
@@ -416,20 +275,7 @@ public class DetectionManager : IDisposable
     }
 
     /// <summary>
-    /// Resets position tracking, causing the next detection to trigger auto-read.
-    /// </summary>
-    public void ResetPositionTracking()
-    {
-        lock (_detectionLock)
-        {
-            _previousPositions.Clear();
-        }
-    }
-
-    /// <summary>
     /// Gets the current detection for a specific waypoint label.
-    /// Used by the waypoint timer to read waypoints independently.
-    /// Filters by auto-read confidence threshold.
     /// If multiple waypoints are detected, returns the one closest to screen center.
     /// </summary>
     public DetectedObject? GetWaypointDetection(string waypointLabel)
@@ -451,7 +297,6 @@ public class DetectionManager : IDisposable
             if (candidates.Count == 1)
                 return candidates[0];
 
-            // Multiple waypoints detected - return the one closest to screen center
             float centerX = _lastFrameWidth / 2f;
             float centerY = _lastFrameHeight / 2f;
 
@@ -459,7 +304,7 @@ public class DetectionManager : IDisposable
                 .OrderBy(d => {
                     float dx = d.CenterX - centerX;
                     float dy = d.CenterY - centerY;
-                    return dx * dx + dy * dy; // Squared distance (no need for sqrt)
+                    return dx * dx + dy * dy;
                 })
                 .First();
         }
@@ -467,9 +312,7 @@ public class DetectionManager : IDisposable
 
     /// <summary>
     /// Gets the current detection for a waypoint label optimized for sonar mode.
-    /// Filters by auto-read confidence threshold.
-    /// If multiple waypoints are detected, returns the one with narrowest width
-    /// (most likely to be the focused/targeted waypoint).
+    /// If multiple waypoints are detected, returns the one with narrowest width.
     /// </summary>
     public DetectedObject? GetSonarWaypointDetection(string waypointLabel)
     {
@@ -490,146 +333,8 @@ public class DetectionManager : IDisposable
             if (candidates.Count == 1)
                 return candidates[0];
 
-            // Multiple waypoints detected - return the one with narrowest width
             return candidates.OrderBy(d => d.Width).First();
         }
-    }
-
-    /// <summary>
-    /// Starts tracking a label for disappearance detection.
-    /// Call this when starting to read an object so we can detect when user moves away.
-    /// </summary>
-    /// <param name="label">The label to track.</param>
-    /// <param name="detection">The detection object being read.</param>
-    public void StartTrackingLabel(string label, DetectedObject detection)
-    {
-        lock (_detectionLock)
-        {
-            _trackedObjects[label] = detection;
-            _framesSinceLastSeen[label] = 0;
-            Debug.WriteLine($"Started tracking label: {label}");
-        }
-    }
-
-    /// <summary>
-    /// Stops tracking a label (e.g., when TTS completes normally).
-    /// </summary>
-    /// <param name="label">The label to stop tracking.</param>
-    public void StopTrackingLabel(string label)
-    {
-        lock (_detectionLock)
-        {
-            _trackedObjects.Remove(label);
-            _framesSinceLastSeen.Remove(label);
-            Debug.WriteLine($"Stopped tracking label: {label}");
-        }
-    }
-
-    /// <summary>
-    /// Stops tracking all labels.
-    /// </summary>
-    public void StopTrackingAllLabels()
-    {
-        lock (_detectionLock)
-        {
-            _trackedObjects.Clear();
-            _framesSinceLastSeen.Clear();
-        }
-    }
-
-    /// <summary>
-    /// Checks if tracked labels have disappeared and raises events accordingly.
-    /// </summary>
-    private void CheckTrackedLabelsDisappearance(List<DetectedObject> currentDetections)
-    {
-        if (_trackedObjects.Count == 0) return;
-
-        var labelsToRemove = new List<string>();
-        // Use pre-allocated buffer instead of ToHashSet() (Phase 2 optimization)
-        _disappearanceCheckBuffer.Clear();
-        foreach (var d in currentDetections)
-            _disappearanceCheckBuffer.Add(d.Label);
-        var currentLabels = _disappearanceCheckBuffer;
-
-        foreach (var (label, trackedDetection) in _trackedObjects)
-        {
-            // Check if this label is still present
-            var matchingDetection = currentDetections.FirstOrDefault(d => d.Label == label);
-
-            if (matchingDetection == null)
-            {
-                // Label not found in current frame
-                _framesSinceLastSeen[label]++;
-
-                if (_framesSinceLastSeen[label] >= DefaultDisappearanceFrameThreshold)
-                {
-                    Debug.WriteLine($"Label disappeared after {_framesSinceLastSeen[label]} frames: {label}");
-                    labelsToRemove.Add(label);
-
-                    LabelDisappeared?.Invoke(this, new LabelDisappearedEventArgs
-                    {
-                        Label = label,
-                        LastDetection = trackedDetection,
-                        FramesMissing = _framesSinceLastSeen[label]
-                    });
-                }
-            }
-            else
-            {
-                // Label found - check if it's the same object (similar position) or a different one
-                bool isSameObject = IsOverlapping(trackedDetection, matchingDetection, 0.3f);
-
-                if (isSameObject)
-                {
-                    // Same object, reset counter
-                    _framesSinceLastSeen[label] = 0;
-                    _trackedObjects[label] = matchingDetection; // Update with latest position
-                }
-                else
-                {
-                    // Different object with same label - user moved to a new item
-                    Debug.WriteLine($"Label moved to different object: {label}");
-                    labelsToRemove.Add(label);
-
-                    LabelDisappeared?.Invoke(this, new LabelDisappearedEventArgs
-                    {
-                        Label = label,
-                        LastDetection = trackedDetection,
-                        FramesMissing = 0,
-                        MovedToNewObject = true
-                    });
-                }
-            }
-        }
-
-        // Remove labels that have disappeared
-        foreach (var label in labelsToRemove)
-        {
-            _trackedObjects.Remove(label);
-            _framesSinceLastSeen.Remove(label);
-        }
-    }
-
-    /// <summary>
-    /// Checks if two detections overlap significantly (same object).
-    /// </summary>
-    private static bool IsOverlapping(DetectedObject a, DetectedObject b, float minIoU)
-    {
-        int x1 = Math.Max(a.X1, b.X1);
-        int y1 = Math.Max(a.Y1, b.Y1);
-        int x2 = Math.Min(a.X2, b.X2);
-        int y2 = Math.Min(a.Y2, b.Y2);
-
-        int intersectionWidth = Math.Max(0, x2 - x1);
-        int intersectionHeight = Math.Max(0, y2 - y1);
-        float intersection = intersectionWidth * intersectionHeight;
-
-        float areaA = a.Width * a.Height;
-        float areaB = b.Width * b.Height;
-        float union = areaA + areaB - intersection;
-
-        float iou = union > 0 ? intersection / union : 0;
-        return iou >= minIoU;
     }
 
     public void Dispose()
@@ -662,65 +367,4 @@ public class PrimaryObjectChangedEventArgs : EventArgs
 {
     public List<DetectedObject> Detections { get; init; } = [];
     public DateTime Timestamp { get; init; }
-}
-
-/// <summary>
-/// Event arguments for when a tracked label disappears from detection.
-/// </summary>
-public class LabelDisappearedEventArgs : EventArgs
-{
-    /// <summary>
-    /// The label that disappeared.
-    /// </summary>
-    public string Label { get; init; } = "";
-
-    /// <summary>
-    /// The last detection of this label before it disappeared.
-    /// </summary>
-    public DetectedObject? LastDetection { get; init; }
-
-    /// <summary>
-    /// Number of consecutive frames the label was missing.
-    /// </summary>
-    public int FramesMissing { get; init; }
-
-    /// <summary>
-    /// True if the label moved to a different object (same label, different position).
-    /// </summary>
-    public bool MovedToNewObject { get; init; }
-}
-
-/// <summary>
-/// Tracks a detection's position for change detection.
-/// Used to determine if same-labeled objects have moved significantly.
-/// </summary>
-internal readonly struct TrackedPosition
-{
-    public string Label { get; init; }
-    public float CenterX { get; init; }
-    public float CenterY { get; init; }
-    public int FrameWidth { get; init; }
-    public int FrameHeight { get; init; }
-
-    /// <summary>
-    /// Checks if position has changed more than threshold percentage in X or Y.
-    /// </summary>
-    /// <param name="other">Previous position to compare against.</param>
-    /// <param name="threshold">Change threshold as fraction (0.10 = 10%).</param>
-    /// <returns>True if position changed significantly.</returns>
-    public bool HasMovedSignificantly(TrackedPosition other, float threshold)
-    {
-        if (Label != other.Label) return true;
-        if (FrameWidth == 0 || FrameHeight == 0) return false;
-
-        // Normalize positions to 0-1 range
-        float thisNormX = CenterX / FrameWidth;
-        float thisNormY = CenterY / FrameHeight;
-        float otherNormX = other.CenterX / other.FrameWidth;
-        float otherNormY = other.CenterY / other.FrameHeight;
-
-        // Check if either X or Y changed by more than threshold
-        return Math.Abs(thisNormX - otherNormX) > threshold ||
-               Math.Abs(thisNormY - otherNormY) > threshold;
-    }
 }

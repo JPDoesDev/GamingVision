@@ -35,17 +35,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly object _frameLock = new();
     private int _detectionCount;
     private long _lastStatusUpdateTicks;
-    private volatile bool _overlayDispatchPending;
+    // Per-label overlay smoothing: keeps each detection visible until absent for N consecutive inferences
+    private readonly Dictionary<string, (DetectedObject Detection, int MissCount)> _overlayDetectionCache = new();
+    private const int OverlayMissThreshold = 10; // Clear after 10 consecutive misses (~300-500ms at inference speed)
     private bool _disposed;
 
-    // Unified Direct2D overlay fields (handles both detection boxes and crosshair)
-    private Direct2DOverlayWindow? _overlayWindow;
-    private Direct2DRenderer? _overlayRenderer;
+    // Unified Direct2D overlay via dedicated render loop (handles both detection boxes and crosshair)
+    private OverlayRenderLoop? _overlayRenderLoop;
     private OverlayHotkeyService? _overlayHotkeyService;
     private bool _overlayVisible = true;
     private volatile bool _stoppingOverlay;
 
-    // Crosshair fields (crosshair rendering is now part of _overlayRenderer)
+    // Crosshair fields (crosshair rendering is part of the render loop)
     private CrosshairHotkeyService? _crosshairHotkeyService;
     private bool _crosshairVisible = true;
     private volatile bool _stoppingCrosshair;
@@ -1102,9 +1103,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
                 // Disable overlay while waiting (no frames to render)
                 // Note: Crosshair stays visible - it's independent of the game window
-                if (IsOverlayEnabled && _overlayWindow != null)
+                if (IsOverlayEnabled && _overlayRenderLoop != null)
                 {
-                    _overlayWindow.Hide();
+                    _overlayRenderLoop.SetWindowVisible(false);
                 }
             });
         }
@@ -1182,99 +1183,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            // Determine which paths need to run
-            bool overlayNeedsUpdate = IsOverlayRunning && _overlayRenderer != null && _overlayVisible;
-            bool screenReaderNeedsUpdate = IsScreenReaderEnabled;
-
-            // Fast path: Run detection once, use results for both overlay and screen reader
-            if (overlayNeedsUpdate)
-            {
-                // Skip overlay rendering if dispatcher queue is backed up (prevents UI thread congestion)
-                if (_overlayDispatchPending)
-                {
-                    // Still process screen reader if enabled
-                    if (screenReaderNeedsUpdate && _detectionManager != null)
-                    {
-                        _ = _detectionManager.ProcessFrameAsync(e);
-                    }
-                    return;
-                }
-
-                var detectStartTicks = Stopwatch.GetTimestamp();
-                try
-                {
-                    // Use low threshold for overlay (per-group filtering happens in render)
-                    var detections = await detectionService.DetectAsync(e, 0.1f);
-                    var detectMs = (double)(Stopwatch.GetTimestamp() - detectStartTicks) / Stopwatch.Frequency * 1000.0;
-
-                    if (detections != null)
-                    {
-                        // Successful inference - render immediately
-                        _detectionCount = detections.Count;
-
-                        var detectionsForRender = detections;
-                        var dispatchStartTicks = Stopwatch.GetTimestamp();
-
-                        if (frameId > 0)
-                        {
-                            Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", "Dispatcher queued");
-                        }
-
-                        _overlayDispatchPending = true;
-                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
-                            System.Windows.Threading.DispatcherPriority.Render,
-                            () =>
-                            {
-                                _overlayDispatchPending = false;
-                                var dispatchMs = (double)(Stopwatch.GetTimestamp() - dispatchStartTicks) / Stopwatch.Frequency * 1000.0;
-                                if (frameId > 0)
-                                {
-                                    Logger.PerfFrameTimed(frameId, captureStartTicks, "RENDER", $"Dispatcher executed ({dispatchMs:F1}ms wait)");
-                                }
-
-                                var renderStartTicks = Stopwatch.GetTimestamp();
-                                RenderOverlayDetections(detectionsForRender, frameId, captureStartTicks);
-                                var renderMs = (double)(Stopwatch.GetTimestamp() - renderStartTicks) / Stopwatch.Frequency * 1000.0;
-
-                                // Calculate total pipeline time from frame capture start
-                                if (frameId > 0 && captureStartTicks > 0)
-                                {
-                                    var totalMs = (double)(Stopwatch.GetTimestamp() - captureStartTicks) / Stopwatch.Frequency * 1000.0;
-                                    // Calculate capture time (from start to when frame was received)
-                                    // This is approximate since we don't have the exact capture end time here
-                                    var captureMs = totalMs - detectMs - dispatchMs - renderMs;
-                                    Logger.PerfFrameSummary(frameId, captureMs, detectMs, dispatchMs, renderMs, totalMs);
-                                }
-                            });
-
-                        // If screen reader is also enabled, process for TTS events (on separate task to not block)
-                        if (screenReaderNeedsUpdate && _detectionManager != null)
-                        {
-                            // Fire-and-forget: let DetectionManager process for TTS
-                            _ = _detectionManager.ProcessFrameAsync(e);
-                        }
-                    }
-                    else
-                    {
-                        // Inference was skipped (still processing previous frame)
-                        // Clear the overlay so stale boxes don't persist at wrong positions
-                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(
-                            System.Windows.Threading.DispatcherPriority.Render,
-                            () => _overlayRenderer?.Clear());
-
-                        if (frameId > 0)
-                        {
-                            Logger.PerfFrame(frameId, "PIPELINE", "SKIPPED (inference busy)");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error("Overlay detection error", ex);
-                }
-            }
-            // Screen reader only path (no overlay)
-            else if (screenReaderNeedsUpdate && _detectionManager != null)
+            // Run detection once through DetectionManager — overlay and screen reader
+            // both consume results via the DetectionsReady event
+            if (_detectionManager != null)
             {
                 try
                 {
@@ -1308,8 +1219,49 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private async void OnDetectionsReady(object? sender, DetectionEventArgs e)
     {
-        // Note: Overlay rendering is now handled directly in OnFrameCaptured for better performance.
-        // This event is kept for TTS/Screen Reader functionality which subscribes to PrimaryObjectChanged.
+        // Publish detection results to the render loop (lock-free, no Dispatcher needed)
+        if (IsOverlayRunning && _overlayRenderLoop != null)
+        {
+            var detections = e.AllDetections;
+
+            // Per-label smoothing: update cache with current detections,
+            // increment miss counter for labels not in this frame,
+            // remove labels that have been missing too long.
+            // This prevents boxes from flickering when YOLO intermittently misses objects.
+            var currentLabels = new HashSet<string>();
+
+            // Update/add detected labels
+            foreach (var det in detections)
+            {
+                currentLabels.Add(det.Label);
+                _overlayDetectionCache[det.Label] = (det, 0); // Reset miss count
+            }
+
+            // Increment miss count for labels not in this frame
+            var labelsToRemove = new List<string>();
+            foreach (var (label, entry) in _overlayDetectionCache)
+            {
+                if (!currentLabels.Contains(label))
+                {
+                    var newMiss = entry.MissCount + 1;
+                    if (newMiss >= OverlayMissThreshold)
+                        labelsToRemove.Add(label);
+                    else
+                        _overlayDetectionCache[label] = (entry.Detection, newMiss);
+                }
+            }
+
+            foreach (var label in labelsToRemove)
+                _overlayDetectionCache.Remove(label);
+
+            // Build merged detection list from cache (includes recently-seen labels)
+            var smoothedDetections = _overlayDetectionCache.Values
+                .Select(v => v.Detection)
+                .ToList();
+
+            var items = BuildOverlayItems(smoothedDetections);
+            _overlayRenderLoop.PublishDetections(items);
+        }
 
         // Check for sonar mode waypoint beep
         if (_sonarArmed && _waypointSettings?.Mode == "sonar")
@@ -1395,36 +1347,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Logger.LogDebug("WaypointTracker: Timer restarted for next sonar interval");
     }
 
-    private void OnLabelDisappeared(object? sender, LabelDisappearedEventArgs e)
-    {
-        // Label disappeared or moved to different object - cancel any ongoing TTS
-        Logger.Log($"Label disappeared: {e.Label} (MovedToNew: {e.MovedToNewObject}, FramesMissing: {e.FramesMissing})");
-
-        // Cancel current speech and clear queue
-        _ttsService?.Stop();
-        _ttsService?.ClearQueue();
-
-        // Reset position tracking so the next detection triggers auto-read
-        _detectionManager?.ResetPositionTracking();
-    }
+    // Cooldown tracking for auto-read (Stopwatch ticks)
+    private long _lastAutoReadTicks;
 
     private async void OnPrimaryObjectChanged(object? sender, PrimaryObjectChangedEventArgs e)
     {
-        // Primary objects changed - queue for auto-read
         if (e.Detections.Count == 0)
             return;
 
-        // Get detection outside try block so it's in scope for error handling
         var detection = e.Detections[0];
 
         try
         {
-            // Check settings
             var profile = GetSelectedGameProfile();
             var autoReadEnabled = profile?.Detection.AutoReadEnabled ?? true;
-            var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
+            if (!autoReadEnabled) return;
 
-            Logger.Log($"Primary object changed: {detection.Label} (AutoRead: {autoReadEnabled})");
+            // Cooldown check: skip if not enough time has elapsed
+            var cooldownMs = profile?.Detection.AutoReadCooldown ?? 2000;
+            var now = Stopwatch.GetTimestamp();
+            var elapsedMs = (double)(now - _lastAutoReadTicks) / Stopwatch.Frequency * 1000.0;
+            if (_lastAutoReadTicks != 0 && elapsedMs < cooldownMs)
+                return;
+
+            // Skip if TTS is busy
+            if (_ttsService == null || !_ttsService.IsReady || _ttsService.IsSpeaking)
+                return;
+
+            var readLabelAloud = profile?.Detection.ReadPrimaryLabelAloud ?? true;
 
             // Get current frame for OCR
             CapturedFrame? frame;
@@ -1447,53 +1397,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var textResults = await _ocrService.ExtractTextFromRegionsAsync(
                 frame.Data, frame.Width, frame.Height, frame.Stride, regions);
 
-            // Build text result - only speak if OCR found text
             if (textResults.TryGetValue(detection.Label, out var text) && !string.IsNullOrWhiteSpace(text))
             {
                 var displayText = $"{detection.Label}: {text}";
                 var speechText = readLabelAloud ? $"{detection.Label}, {text}" : text;
 
-                Logger.Log($"OCR result: {displayText}, speechText: '{speechText}'");
+                Logger.Log($"Auto-read: {displayText}");
 
-                // Speak the extracted text (only if auto-read is enabled)
-                if (autoReadEnabled && _ttsService != null && _ttsService.IsReady)
-                {
-                    // Auto-read should NOT interrupt current speech - skip if TTS is busy
-                    // Manual reads (hotkeys) will interrupt, but auto-reads should wait/skip
-                    if (_ttsService.IsSpeaking)
-                    {
-                        Logger.Log($"Auto-read: Skipping '{detection.Label}' - TTS is busy");
-                    }
-                    else
-                    {
-                        // Start tracking the label being read so we can cancel if user moves away
-                        _detectionManager?.StartTrackingLabel(detection.Label, detection);
+                await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: false);
 
-                        // Auto-read uses interrupt: false - should not interrupt anything
-                        await SpeakWithVoiceAsync(speechText, SpeechTier.Primary, detection, frame.Width, interrupt: false);
-
-                        // Stop tracking after speech completes (if not already stopped due to disappearance)
-                        _detectionManager?.StopTrackingLabel(detection.Label);
-                    }
-                }
+                // Update cooldown timestamp after successful speech
+                _lastAutoReadTicks = Stopwatch.GetTimestamp();
 
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
                     LastReadText = displayText;
                 });
             }
-            else
-            {
-                // OCR found no text - silently skip for auto-read (no beep for automatic reads)
-                Logger.Log($"Auto-read: No OCR text for '{detection.Label}', skipping");
-            }
         }
         catch (Exception ex)
         {
             Logger.Error("OnPrimaryObjectChanged error", ex);
-
-            // Stop tracking on error
-            _detectionManager?.StopTrackingAllLabels();
 
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
@@ -1525,19 +1449,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         // Create callback for live crosshair preview updates
         Action<CrosshairSettings>? crosshairPreviewCallback = null;
-        if (crosshairWasRunning && _overlayRenderer != null)
+        if (crosshairWasRunning && _overlayRenderLoop != null)
         {
             crosshairPreviewCallback = (settings) =>
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                {
-                    _overlayRenderer?.UpdateCrosshairSettings(settings);
-                    // Trigger re-render for live preview
-                    if (!IsOverlayRunning || !_overlayVisible)
-                    {
-                        _overlayRenderer?.Render(null);
-                    }
-                });
+                _overlayRenderLoop?.UpdateCrosshairSettings(settings);
             };
         }
 
@@ -1570,11 +1486,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 var profile = GetSelectedGameProfile();
                 var settings = profile?.Crosshair ?? new CrosshairSettings();
-                _overlayRenderer?.UpdateCrosshairSettings(settings);
-                if (!IsOverlayRunning || !_overlayVisible)
-                {
-                    _overlayRenderer?.Render(null);
-                }
+                _overlayRenderLoop?.UpdateCrosshairSettings(settings);
             }
         }
 
@@ -1695,7 +1607,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_detectionManager != null)
         {
             _detectionManager.PrimaryObjectChanged += OnPrimaryObjectChanged;
-            _detectionManager.LabelDisappeared += OnLabelDisappeared;
         }
 
         Logger.Log("Screen reader enabled");
@@ -1717,8 +1628,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (_detectionManager != null)
         {
             _detectionManager.PrimaryObjectChanged -= OnPrimaryObjectChanged;
-            _detectionManager.LabelDisappeared -= OnLabelDisappeared;
-            _detectionManager.StopTrackingAllLabels();
         }
 
         Logger.Log("Screen reader disabled");
@@ -1738,32 +1647,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
 
-        // If crosshair already created the D2D window, reuse it
-        if (_overlayWindow == null || _overlayRenderer == null)
+        // Start the render loop if not already running (crosshair may have started it)
+        if (_overlayRenderLoop == null || !_overlayRenderLoop.IsRunning)
         {
-            _overlayWindow = new Direct2DOverlayWindow();
-            _overlayWindow.Create();
-            _overlayWindow.PositionOverMonitor(monitorIndex);
+            var crosshairSettings = (IsCrosshairRunning && _crosshairVisible)
+                ? (profile.Crosshair ?? new CrosshairSettings())
+                : null;
 
-            _overlayRenderer = new Direct2DRenderer();
-            _overlayRenderer.Initialize(
-                _overlayWindow.Handle,
-                _overlayWindow.PhysicalWidth,
-                _overlayWindow.PhysicalHeight);
-            _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
-
-            // Preserve crosshair state if it was already active
-            if (IsCrosshairRunning && _crosshairVisible)
-            {
-                var crosshairSettings = profile.Crosshair ?? new CrosshairSettings();
-                _overlayRenderer.UpdateCrosshairSettings(crosshairSettings);
-                _overlayRenderer.SetCrosshairVisible(true);
-            }
-
-            _overlayWindow.Show();
+            _overlayRenderLoop = new OverlayRenderLoop(targetFps: 30);
+            _overlayRenderLoop.Start(monitorIndex, crosshairSettings, _crosshairVisible);
         }
-
-        Logger.Log($"Overlay DPI scale set to {_overlayWindow.DpiScale:F2} ({_overlayWindow.DpiScale * 100:F0}%)");
 
         // Register overlay hotkey
         var hotkey = profile.Overlay?.ToggleHotkey ?? "Alt+O";
@@ -1789,22 +1682,18 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _overlayHotkeyService?.Dispose();
             _overlayHotkeyService = null;
 
-            // If crosshair is still active, keep the window/renderer alive
-            if (IsCrosshairRunning)
+            // Clear published detections so render loop only shows crosshair
+            _overlayRenderLoop?.PublishDetections(null);
+
+            // If crosshair is not active, tear down the render loop entirely
+            if (!IsCrosshairRunning)
             {
-                // Just clear detection boxes; crosshair redraws automatically
-                _overlayRenderer?.Clear();
-            }
-            else
-            {
-                // No other features using the window — tear down
-                _overlayRenderer?.Dispose();
-                _overlayRenderer = null;
-                _overlayWindow?.Dispose();
-                _overlayWindow = null;
+                _overlayRenderLoop?.Dispose();
+                _overlayRenderLoop = null;
             }
 
             IsOverlayRunning = false;
+            _overlayDetectionCache.Clear();
             Logger.Log("Overlay disabled");
         }
         finally
@@ -1815,33 +1704,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnOverlayHotkeyPressed(object? sender, EventArgs e)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-        {
-            _overlayVisible = !_overlayVisible;
+        _overlayVisible = !_overlayVisible;
 
-            if (_overlayWindow != null)
-            {
-                // Window stays visible if crosshair is still active
-                bool shouldShowWindow = _overlayVisible || _crosshairVisible;
-                if (shouldShowWindow)
-                    _overlayWindow.Show();
-                else
-                    _overlayWindow.Hide();
-            }
-        });
+        if (_overlayRenderLoop != null)
+        {
+            _overlayRenderLoop.SetOverlayVisible(_overlayVisible);
+
+            // Window stays visible if crosshair is still active
+            bool shouldShowWindow = _overlayVisible || _crosshairVisible;
+            _overlayRenderLoop.SetWindowVisible(shouldShowWindow);
+        }
     }
 
     /// <summary>
-    /// Renders overlay detections on the canvas using batch drawing for performance.
+    /// Builds overlay render items from detections, matching each detection to its overlay group.
     /// </summary>
-    /// <param name="detections">The detections to render.</param>
-    /// <param name="frameId">Optional frame ID for performance tracking.</param>
-    /// <param name="captureStartTicks">Optional capture start ticks for performance tracking.</param>
-    private void RenderOverlayDetections(List<DetectedObject> detections, ulong frameId = 0, long captureStartTicks = 0)
+    private List<(DetectedObject detection, OverlayGroup group)> BuildOverlayItems(List<DetectedObject> detections)
     {
-        if (_overlayRenderer == null || !_overlayVisible) return;
-
-        // Build list of (detection, group) pairs for batch rendering
         var items = new List<(DetectedObject detection, OverlayGroup group)>();
 
         foreach (var group in OverlayGroups)
@@ -1855,8 +1734,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        // Single unified render call (detections + crosshair in one pass)
-        _overlayRenderer.Render(items, frameId, captureStartTicks);
+        return items;
     }
 
     [RelayCommand]
@@ -1970,32 +1848,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var settings = profile.Crosshair ?? new CrosshairSettings();
         var monitorIndex = profile.Capture?.MonitorIndex ?? 0;
 
-        // If overlay already created the D2D window, just attach crosshair to it
-        if (_overlayRenderer != null)
+        // If render loop already running (overlay started it), just configure crosshair
+        if (_overlayRenderLoop != null && _overlayRenderLoop.IsRunning)
         {
-            _overlayRenderer.UpdateCrosshairSettings(settings);
-            _overlayRenderer.SetCrosshairVisible(true);
+            _overlayRenderLoop.UpdateCrosshairSettings(settings);
+            _overlayRenderLoop.SetCrosshairVisible(true);
         }
         else
         {
-            // No overlay running — create the window/renderer for crosshair alone
-            _overlayWindow = new Direct2DOverlayWindow();
-            _overlayWindow.Create();
-            _overlayWindow.PositionOverMonitor(monitorIndex);
-
-            _overlayRenderer = new Direct2DRenderer();
-            _overlayRenderer.Initialize(
-                _overlayWindow.Handle,
-                _overlayWindow.PhysicalWidth,
-                _overlayWindow.PhysicalHeight);
-            _overlayRenderer.DpiScale = _overlayWindow.DpiScale;
-            _overlayRenderer.UpdateCrosshairSettings(settings);
-            _overlayRenderer.SetCrosshairVisible(true);
-
-            _overlayWindow.Show();
-
-            // Trigger initial render for the crosshair (no detections)
-            _overlayRenderer.Render(null);
+            // No overlay running — start render loop for crosshair alone
+            _overlayRenderLoop = new OverlayRenderLoop(targetFps: 30);
+            _overlayRenderLoop.Start(monitorIndex, settings, crosshairVisible: true);
         }
 
         // Register crosshair hotkey
@@ -2022,18 +1885,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _crosshairHotkeyService?.Dispose();
             _crosshairHotkeyService = null;
 
-            if (_overlayRenderer != null)
+            if (_overlayRenderLoop != null)
             {
-                _overlayRenderer.SetCrosshairVisible(false);
-                _overlayRenderer.UpdateCrosshairSettings(null);
+                _overlayRenderLoop.SetCrosshairVisible(false);
+                _overlayRenderLoop.UpdateCrosshairSettings(null);
 
-                // If overlay detection is also not running, tear down everything
+                // If overlay detection is also not running, tear down the render loop
                 if (!IsOverlayRunning)
                 {
-                    _overlayRenderer.Dispose();
-                    _overlayRenderer = null;
-                    _overlayWindow?.Dispose();
-                    _overlayWindow = null;
+                    _overlayRenderLoop.Dispose();
+                    _overlayRenderLoop = null;
                 }
             }
 
@@ -2050,31 +1911,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnCrosshairHotkeyPressed(object? sender, EventArgs e)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        _crosshairVisible = !_crosshairVisible;
+
+        if (_overlayRenderLoop != null)
         {
-            _crosshairVisible = !_crosshairVisible;
+            _overlayRenderLoop.SetCrosshairVisible(_crosshairVisible);
 
-            if (_overlayRenderer != null)
-            {
-                _overlayRenderer.SetCrosshairVisible(_crosshairVisible);
-
-                // Update window visibility
-                bool shouldShowWindow = _overlayVisible || _crosshairVisible;
-                if (_overlayWindow != null)
-                {
-                    if (shouldShowWindow)
-                        _overlayWindow.Show();
-                    else
-                        _overlayWindow.Hide();
-                }
-
-                // Trigger re-render if detection pipeline is not actively driving frames
-                if (!IsOverlayRunning || !_overlayVisible)
-                {
-                    _overlayRenderer.Render(null);
-                }
-            }
-        });
+            // Update window visibility
+            bool shouldShowWindow = _overlayVisible || _crosshairVisible;
+            _overlayRenderLoop.SetWindowVisible(shouldShowWindow);
+        }
     }
 
     /// <summary>
@@ -2083,17 +1929,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public void RefreshCrosshair()
     {
-        if (!IsCrosshairRunning || _overlayRenderer == null) return;
+        if (!IsCrosshairRunning || _overlayRenderLoop == null) return;
 
         var profile = GetSelectedGameProfile();
         var settings = profile?.Crosshair ?? new CrosshairSettings();
-        _overlayRenderer.UpdateCrosshairSettings(settings);
-
-        // Trigger re-render if detection pipeline is not actively driving frames
-        if (!IsOverlayRunning || !_overlayVisible)
-        {
-            _overlayRenderer.Render(null);
-        }
+        _overlayRenderLoop.UpdateCrosshairSettings(settings);
     }
 
     #endregion
@@ -2794,8 +2634,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         // Clean up overlay / crosshair resources
         _overlayHotkeyService?.Dispose();
         _crosshairHotkeyService?.Dispose();
-        _overlayRenderer?.Dispose();
-        _overlayWindow?.Dispose();
+        _overlayRenderLoop?.Dispose();
 
         GC.SuppressFinalize(this);
     }

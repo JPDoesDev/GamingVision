@@ -44,11 +44,6 @@ public class DetectionSettings
     public bool AutoReadEnabled { get; set; } = false;
 
     /// <summary>
-    /// Only read objects that have changed since last read.
-    /// </summary>
-    public bool OnlyReadChanges { get; set; } = true;
-
-    /// <summary>
     /// Speak the label name aloud when reading primary objects.
     /// </summary>
     public bool ReadPrimaryLabelAloud { get; set; } = true;
@@ -75,7 +70,6 @@ public class DetectionSettings
         MaxDetections = MaxDetections,
         TargetFps = TargetFps,
         AutoReadEnabled = AutoReadEnabled,
-        OnlyReadChanges = OnlyReadChanges,
         ReadPrimaryLabelAloud = ReadPrimaryLabelAloud,
         ReadSecondaryLabelAloud = ReadSecondaryLabelAloud,
         ReadTertiaryLabelAloud = ReadTertiaryLabelAloud
