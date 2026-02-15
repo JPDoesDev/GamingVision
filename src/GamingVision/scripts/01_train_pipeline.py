@@ -507,18 +507,12 @@ def step_export() -> bool:
             # Add classes from training to game_config
             class_names = get_class_names()
             existing_labels = {label.get("name") for label in game_cfg.get("labels", [])}
-            existing_primary = set(game_cfg.get("primaryLabels", []))
-            existing_secondary = set(game_cfg.get("secondaryLabels", []))
-            existing_tertiary = set(game_cfg.get("tertiaryLabels", []))
-            all_existing_tiers = existing_primary | existing_secondary | existing_tertiary
 
-            # Initialize arrays if they don't exist
+            # Initialize labels array if it doesn't exist
             if "labels" not in game_cfg:
                 game_cfg["labels"] = []
-            if "primaryLabels" not in game_cfg:
-                game_cfg["primaryLabels"] = []
 
-            # Add new classes
+            # Add new classes to labels list only (user assigns tiers via Game Settings)
             new_classes_added = []
             for class_name in class_names:
                 # Add to labels array if not already there
@@ -527,10 +521,6 @@ def step_export() -> bool:
                         "name": class_name,
                         "description": ""
                     })
-
-                # Add to primaryLabels if not in any tier
-                if class_name not in all_existing_tiers:
-                    game_cfg["primaryLabels"].append(class_name)
                     new_classes_added.append(class_name)
 
             with open(config_path, 'w') as f:
@@ -539,9 +529,10 @@ def step_export() -> bool:
             print(f"\nUpdated game_config.json:")
             print(f"  modelFile: {old_model} -> {default_model}.onnx")
             if new_classes_added:
-                print(f"  Added {len(new_classes_added)} new classes to primaryLabels:")
+                print(f"  Added {len(new_classes_added)} new classes to labels list:")
                 for cls in new_classes_added:
                     print(f"    - {cls}")
+                print(f"  Note: Assign new labels to tiers via Edit > Game Settings")
             else:
                 print(f"  Classes: All {len(class_names)} classes already configured")
         else:
